@@ -26,18 +26,21 @@ func userFromContext(ctx context.Context) (*models.User, bool) {
 func Authenticate(ctx context.Context, w http.ResponseWriter, r *http.Request, db services.DB) (context.Context, bool) {
 	public, private, ok := r.BasicAuth()
 	if !ok {
+		log.Print("Authentication failed: couldn't retrieve basic auth")
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return nil, false
 	}
 
 	cred, err := models.Authenticate(db, public, private)
 	if err != nil {
+		log.Print("Authentication failed: couldn't find credential")
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return nil, false
 	}
 
 	u, err := cred.Owner(db)
 	if err != nil {
+		log.Print("Authentication failed: couldn't load user's owner")
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return nil, false
 	}
@@ -142,6 +145,12 @@ func RecordGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db s
 //
 // It has logging and CORS middleware applied to it
 func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db services.DB) {
+	if err := r.ParseForm(); err != nil {
+		log.Printf("RecordGET Error: %s", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
 	k := r.Form[kindParam]
 	if len(k) == 0 {
 		http.Error(w, "You must specifiy a kind", http.StatusBadRequest)
@@ -191,6 +200,7 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db 
 		}
 	} else {
 		if allowed, err := access.CanWrite(db, user, m); err != nil {
+			log.Print("CanWrite Error: %s", err)
 			switch err {
 			case data.ErrAccessDenial:
 				fallthrough // don't leak information
@@ -206,12 +216,14 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db 
 			}
 			return
 		} else if !allowed {
+			log.Print("write access denied")
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
 	}
 
 	if err := db.Save(m); err != nil {
+		log.Print("Save Error: %s", err)
 		switch err {
 		case data.ErrAccessDenial:
 			fallthrough // don't leak information
@@ -248,6 +260,12 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db 
 //
 // It has logging and CORS middleware applied to it.
 func RecordDELETE(ctx context.Context, w http.ResponseWriter, r *http.Request, db services.DB) {
+	if err := r.ParseForm(); err != nil {
+		log.Printf("RecordGET Error: %s", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
 	k := r.Form[kindParam]
 	if len(k) == 0 {
 		http.Error(w, "You must specifiy a kind", http.StatusBadRequest)
