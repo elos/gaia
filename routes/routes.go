@@ -1,5 +1,6 @@
 package routes
 
 const (
-	Record = "/record/"
+	Record      = "/record/"
+	RecordQuery = "/record/query/"
 )

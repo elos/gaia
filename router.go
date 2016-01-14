@@ -31,5 +31,20 @@ func router(m *Middleware, s *Services) http.Handler {
 		}
 	})
 
+	mux.HandleFunc(routes.RecordQuery, func(w http.ResponseWriter, r *http.Request) {
+		ctx, ok := routes.Authenticate(context.Background(), w, r, s.DB)
+		if !ok {
+			return
+		}
+
+		switch r.Method {
+		case "POST":
+			routes.RecordQueryPOST(ctx, w, r, s.DB)
+		default:
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+	})
+
 	return mux
 }

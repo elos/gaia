@@ -146,7 +146,7 @@ func RecordGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db s
 // It has logging and CORS middleware applied to it
 func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db services.DB) {
 	if err := r.ParseForm(); err != nil {
-		log.Printf("RecordGET Error: %s", err)
+		log.Printf("RecordPOST Error: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -174,6 +174,7 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db 
 	}
 
 	if err = json.Unmarshal(body, m); err != nil {
+		log.Printf("RecordPOST Info: request body:\n%s", string(body))
 		log.Printf("RecordPOST Error: while unmarshalling request body, %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -261,7 +262,7 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db 
 // It has logging and CORS middleware applied to it.
 func RecordDELETE(ctx context.Context, w http.ResponseWriter, r *http.Request, db services.DB) {
 	if err := r.ParseForm(); err != nil {
-		log.Printf("RecordGET Error: %s", err)
+		log.Printf("RecordDELETE Error: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -313,7 +314,7 @@ func RecordDELETE(ctx context.Context, w http.ResponseWriter, r *http.Request, d
 
 	user, ok := userFromContext(ctx)
 	if !ok {
-		log.Print("RecordDelete Error: failed to retrieve user from context")
+		log.Print("RecordDELETE Error: failed to retrieve user from context")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -355,4 +356,87 @@ func RecordOPTIONS(ctx context.Context, w http.ResponseWriter, r *http.Request) 
 	// The CORS header has already been applied by our middleware,
 	// therefore we just need to indicate a successful response.
 	w.WriteHeader(http.StatusOK)
+}
+
+func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB) {
+	if err := r.ParseForm(); err != nil {
+		log.Printf("RecordQueryPOST Error: %s", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	k := r.Form[kindParam]
+	if len(k) == 0 {
+		http.Error(w, "You must specifiy a kind", http.StatusBadRequest)
+		return
+	}
+
+	kind := data.Kind(k[0])
+
+	if _, ok := models.Kinds[kind]; !ok {
+		http.Error(w, fmt.Sprintf("The kind '%s' is not recognized", kind), http.StatusBadRequest)
+		return
+	}
+
+	defer r.Body.Close()
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("RecordQueryPOST Error: while reading request body, %s", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	attrs := make(data.AttrMap)
+
+	if err = json.Unmarshal(body, &attrs); err != nil {
+		log.Printf("RecordQueryPOST Info: request body:\n%s", string(body))
+		log.Printf("RecordQueryPOST Error: while unmarshalling request body, %s", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	user, ok := userFromContext(ctx)
+	if !ok {
+		log.Print("RecordQueryPOST Error: failed to retrieve user from context")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	q := db.Query(kind)
+	q.Select(attrs)
+	iter, err := q.Execute()
+	if err != nil {
+		log.Printf("RecordQueryPOST Error: while executing query, %s", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	results := make([]data.Record, 0)
+	m := models.ModelFor(kind)
+	for iter.Next(m) {
+		if ok, err := access.CanRead(db, user, m); err != nil {
+			log.Printf("RecordQueryPOST Error: while processing query, %s", err)
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		} else if ok {
+			results = append(results, m)
+			m = models.ModelFor(kind)
+		}
+	}
+
+	if err := iter.Close(); err != nil {
+		log.Printf("RecordQueryPOST Error: while loading query, %s", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	returnBody, err := json.Marshal(results)
+	if err != nil {
+		log.Printf("RecordQueryPOST Error: while loading query, %s", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(returnBody)
 }
