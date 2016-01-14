@@ -1,6 +1,7 @@
 package gaia
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/elos/gaia/routes"
@@ -11,6 +12,8 @@ func router(m *Middleware, s *Services) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc(routes.Record, func(w http.ResponseWriter, r *http.Request) {
+		log.Print("%s %s", r.Method, routes.Record)
+
 		ctx, ok := routes.Authenticate(context.Background(), w, r, s.DB)
 		if !ok {
 			return
@@ -32,6 +35,8 @@ func router(m *Middleware, s *Services) http.Handler {
 	})
 
 	mux.HandleFunc(routes.RecordQuery, func(w http.ResponseWriter, r *http.Request) {
+		log.Print("%s %s", r.Method, routes.RecordQuery)
+
 		ctx, ok := routes.Authenticate(context.Background(), w, r, s.DB)
 		if !ok {
 			return
