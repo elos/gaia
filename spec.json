@@ -1,0 +1,33 @@
+{
+    "name": "gaia",
+    "host": "gaia.elos.com",
+    "port": 80,
+
+    "middleware": [
+        "cors", "log"
+    ],
+
+    "services": [
+        "db"
+    ],
+
+    "endpoints": [
+        {
+            "name": "record",
+            "path": "/record/:kind/:id",
+            "actions": [ "GET", "POST", "DELETE", "OPTIONS" ],
+            "middleware": {
+                "GET": [ "log", "cors" ],
+                "POST": [ "log", "cors" ],
+                "DELETE": [ "log", "cors" ],
+                "OPTIONS": [ "log", "cors" ]
+            },
+            "services": {
+                "GET": [ "db" ],
+                "POST": [ "db" ],
+                "DELETE": [ "db" ],
+                "OPTIONS": [ "db" ]
+            }
+        }
+    ]
+}
