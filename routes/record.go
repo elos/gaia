@@ -195,7 +195,23 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db 
 	}
 
 	if creation {
-		if !access.CanCreate(user, kind) {
+		if allowed, err := access.CanCreate(db, user, m); err != nil {
+			log.Print("CanCreate Error: %s", err)
+			switch err {
+			case data.ErrAccessDenial:
+				fallthrough // don't leak information
+			case data.ErrNotFound:
+				http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+			case data.ErrNoConnection:
+				fallthrough
+			case data.ErrInvalidID:
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			default:
+				log.Printf("RecordPOST Error: %s", err)
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			}
+			return
+		} else if !allowed {
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
