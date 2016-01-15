@@ -12,7 +12,7 @@ func router(m *Middleware, s *Services) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc(routes.Record, func(w http.ResponseWriter, r *http.Request) {
-		log.Print("%s %s", r.Method, routes.Record)
+		log.Printf("%s %s", r.Method, routes.Record)
 
 		ctx, ok := routes.Authenticate(context.Background(), w, r, s.DB)
 		if !ok {
