@@ -280,46 +280,19 @@ func (db *DB) PopulateByID(r data.Record) error {
 }
 
 func (db *DB) PopulateByField(field string, value interface{}, r data.Record) error {
-	params := url.Values{}
-	params.Set("kind", r.Kind().String())
-	url := db.recordQueryURL(params)
-
-	resp, err := db.postJSON(url, data.AttrMap{
+	iter, err := db.query(r.Kind(), data.AttrMap{
 		field: value,
 	})
+
 	if err != nil {
 		return err
 	}
 
-	switch resp.StatusCode {
-	case http.StatusBadRequest:
-	case http.StatusInternalServerError:
-	case http.StatusUnauthorized:
-		return data.ErrAccessDenial
-	case http.StatusOK:
-		defer resp.Body.Close()
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-
-		results := make([]data.Record, 0)
-
-		if err := json.Unmarshal(body, &results); err != nil {
-			return err
-		}
-
-		if len(results) == 0 {
-			return data.ErrNotFound
-		} else {
-			return transfer.TransferAttrs(results[0], r)
-		}
-	default:
-		log.Printf("Unexpected status code: %d", resp.StatusCode)
-		return data.ErrNoConnection
+	if !iter.Next(r) {
+		return data.ErrNotFound
 	}
 
-	return nil
+	return iter.Close()
 }
 
 func (db *DB) Query(k data.Kind) data.Query {
