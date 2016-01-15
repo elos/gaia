@@ -3,6 +3,7 @@ package gaia
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -15,9 +16,53 @@ import (
 	"github.com/elos/models"
 )
 
+// DB implements the data.DB interface, and communicates over HTTP
+// with the gaia server to complete it's actions
 type DB struct {
 	URL, Username, Password string
 	*http.Client
+}
+
+func (db *DB) get(url string) (*http.Response, error) {
+	req, err := http.NewRequest("GET", url, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return db.do(req)
+}
+
+func (db *DB) deleteReq(url string) (*http.Response, error) {
+	req, err := http.NewRequest("DELETE", url, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return db.do(req)
+}
+
+func (db *DB) postJSON(url string, v interface{}) (*http.Response, error) {
+	requestBody, err := json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+
+	return db.post(url, bytes.NewBuffer(requestBody))
+}
+
+func (db *DB) post(url string, body io.Reader) (*http.Response, error) {
+	req, err := http.NewRequest("POST", url, body)
+	if err != nil {
+		return nil, err
+	}
+	return db.do(req)
+}
+
+func (db *DB) do(req *http.Request) (*http.Response, error) {
+	req.SetBasicAuth(db.Username, db.Password)
+	return db.Client.Do(req)
 }
 
 func (db *DB) NewID() data.ID {
@@ -35,18 +80,7 @@ func (db *DB) Save(r data.Record) error {
 	params.Set("id", r.ID().String())
 	url := db.URL + "/record/?" + params.Encode()
 
-	requestBody, err := json.Marshal(r)
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(requestBody))
-	if err != nil {
-		return err
-	}
-	req.SetBasicAuth(db.Username, db.Password)
-
-	resp, err := db.Client.Do(req)
+	resp, err := db.postJSON(url, r)
 	if err != nil {
 		return err
 	}
@@ -80,13 +114,7 @@ func (db *DB) Delete(r data.Record) error {
 	params.Set("id", r.ID().String())
 	url := db.URL + "/record/?" + params.Encode()
 
-	req, err := http.NewRequest("DELETE", url, nil)
-	if err != nil {
-		return err
-	}
-	req.SetBasicAuth(db.Username, db.Password)
-
-	resp, err := db.Client.Do(req)
+	resp, err := db.deleteReq(url)
 	if err != nil {
 		return err
 	}
@@ -115,13 +143,8 @@ func (db *DB) PopulateByID(r data.Record) error {
 	params.Set("id", r.ID().String())
 	url := db.URL + "/record/?" + params.Encode()
 
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return err
-	}
-	req.SetBasicAuth(db.Username, db.Password)
+	resp, err := db.get(url)
 
-	resp, err := db.Client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -162,20 +185,9 @@ func (db *DB) PopulateByField(field string, value interface{}, r data.Record) er
 	params.Set("kind", r.Kind().String())
 	url := db.URL + "/record/query/?" + params.Encode()
 
-	requestBody, err := json.Marshal(data.AttrMap{
+	resp, err := db.postJSON(url, data.AttrMap{
 		field: value,
 	})
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(requestBody))
-	if err != nil {
-		return err
-	}
-	req.SetBasicAuth(db.Username, db.Password)
-
-	resp, err := db.Client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -225,18 +237,8 @@ func (db *DB) query(k data.Kind, attrs data.AttrMap) (data.Iterator, error) {
 	params.Set("kind", k.String())
 	url := db.URL + "/record/query/?" + params.Encode()
 
-	requestBody, err := json.Marshal(attrs)
-	if err != nil {
-		return nil, err
-	}
+	resp, err := db.postJSON(url, attrs)
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(requestBody))
-	if err != nil {
-		return nil, err
-	}
-	req.SetBasicAuth(db.Username, db.Password)
-
-	resp, err := db.Client.Do(req)
 	if err != nil {
 		return nil, err
 	}
