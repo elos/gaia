@@ -173,6 +173,8 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db 
 		return
 	}
 
+	log.Print("Request Body:\n%s", string(body))
+
 	if err = json.Unmarshal(body, m); err != nil {
 		log.Printf("RecordPOST Info: request body:\n%s", string(body))
 		log.Printf("RecordPOST Error: while unmarshalling request body, %s", err)
