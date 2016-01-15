@@ -1,11 +1,13 @@
 Gaia - Elos Ontology Server
 ---------------------------
 
-Gaia is an HTTP protocol for interacting with the elos ontology. It consists of just two endpoints: `/record/` and `/record/query`.
+Gaia is an HTTP protocol for interacting with the elos ontology. 
 
-This document serves both as a spec for the gaia http protocol, but also as a discussion for it's uses.
+It consists of  two endpoints: `/record/` and `/record/query/`.
 
-### '/record/`
+This document serves both as a spec for the gaia HTTP protocol and as documentation for it's use.
+
+### `/record/`
 
 #### GET
 
@@ -36,7 +38,7 @@ Conceptual: Create a new model or update the included model
 
 Example: POST http://gaia.elos.io/record/?kind=task
             {
-                "name": "New Task",
+                "name": "New Task"
             }
 
 **Required** parameters: `kind`
@@ -70,7 +72,7 @@ Error Responses:
  * (400, "The kind is not recognized")
  * (400, "The id is invalid")
 
-### `/record/query`
+### `/record/query/`
 
 #### POST
 
