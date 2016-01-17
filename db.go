@@ -104,6 +104,7 @@ func (db *DB) save(r data.Record) error {
 	case http.StatusUnauthorized:
 		return data.ErrAccessDenial
 	case http.StatusCreated:
+		fallthrough
 	case http.StatusOK:
 		defer resp.Body.Close()
 		body, err := ioutil.ReadAll(resp.Body)
@@ -168,6 +169,7 @@ func (db *DB) query(k data.Kind, attrs data.AttrMap) (data.Iterator, error) {
 
 	switch resp.StatusCode {
 	case http.StatusBadRequest:
+		fallthrough
 	case http.StatusInternalServerError:
 		return nil, data.ErrNoConnection
 	case http.StatusUnauthorized:
