@@ -169,6 +169,7 @@ func (db *DB) query(k data.Kind, attrs data.AttrMap) (data.Iterator, error) {
 
 	switch resp.StatusCode {
 	case http.StatusBadRequest:
+		log.Print("gaia db bad request")
 		fallthrough
 	case http.StatusInternalServerError:
 		return nil, data.ErrNoConnection

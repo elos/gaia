@@ -11,6 +11,16 @@ import (
 func router(m *Middleware, s *Services) http.Handler {
 	mux := http.NewServeMux()
 
+	mux.HandleFunc(routes.Register, func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			routes.RegisterPOST(context.Background(), w, r, s.DB)
+		default:
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+	})
+
 	mux.HandleFunc(routes.Record, func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("%s %s", r.Method, routes.Record)
 
@@ -45,6 +55,20 @@ func router(m *Middleware, s *Services) http.Handler {
 		switch r.Method {
 		case "POST":
 			routes.RecordQueryPOST(ctx, w, r, s.DB)
+		default:
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+	})
+
+	mux.HandleFunc(routes.CommandSMS, func(w http.ResponseWriter, r *http.Request) {
+		log.Print("%s %s", r.Method, routes.RecordQuery)
+
+		ctx := context.Background()
+
+		switch r.Method {
+		case "POST":
+			routes.CommandSMSPOST(ctx, w, r, s.SMSCommandSessions)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return

@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/elos/gaia/services"
-	"github.com/gorilla/context"
 )
 
 type Middleware struct {
@@ -13,6 +12,7 @@ type Middleware struct {
 
 type Services struct {
 	services.DB
+	services.SMSCommandSessions
 }
 
 type Gaia struct {
@@ -36,5 +36,5 @@ func New(m *Middleware, s *Services) *Gaia {
 }
 
 func (gaia *Gaia) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	context.ClearHandler(http.HandlerFunc(gaia.mux.ServeHTTP)).ServeHTTP(w, r)
+	gaia.mux.ServeHTTP(w, r)
 }
