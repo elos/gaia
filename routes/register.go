@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/elos/data"
 	"github.com/elos/models"
@@ -33,27 +32,9 @@ func RegisterPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, d
 		return
 	}
 
-	u := models.NewUser()
-	u.SetID(db.NewID())
-	u.CreatedAt = time.Now()
-	u.UpdatedAt = time.Now()
-
-	c := models.NewCredential()
-	c.SetID(db.NewID())
-	c.CreatedAt = time.Now()
-	c.UpdatedAt = time.Now()
-	c.Public = username[0]
-	c.Private = password[0]
-	c.SetOwner(u)
-
-	if err := db.Save(u); err != nil {
-		log.Print("RegisterPOST Error: saving user")
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	if err := db.Save(c); err != nil {
-		log.Print("RegisterPOST Error: saving credential")
+	u, err := models.CreateUser(db, username[0], password[0])
+	if err != nil {
+		log.Printf("RegisterPOST Error: creating user: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
