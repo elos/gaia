@@ -31,7 +31,7 @@ func Authenticate(ctx context.Context, w http.ResponseWriter, r *http.Request, d
 		return nil, false
 	}
 
-	cred, err := models.Authenticate(db, public, private)
+	cred, err := access.Authenticate(db, public, private)
 	if err != nil {
 		log.Print("Authentication failed: couldn't find credential")
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
