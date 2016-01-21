@@ -14,6 +14,7 @@ import (
 	"github.com/elos/data"
 	"github.com/elos/data/builtin/mem"
 	"github.com/elos/gaia"
+	"github.com/elos/gaia/services"
 	"github.com/elos/models"
 )
 
@@ -37,7 +38,7 @@ func testInstance(t *testing.T) (data.DB, *gaia.Gaia, *httptest.Server) {
 		&gaia.Services{
 			Logger:             &testLogger{t},
 			DB:                 db,
-			SMSCommandSessions: newMockSMSSessions(),
+			SMSCommandSessions: services.NewSMSMux(),
 		},
 	)
 

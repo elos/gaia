@@ -12,7 +12,6 @@ import (
 	"github.com/elos/elos/command"
 	"github.com/elos/models"
 	"github.com/mitchellh/cli"
-	"github.com/subosito/twilio"
 	"golang.org/x/net/context"
 )
 
@@ -32,8 +31,8 @@ type SMSCommandSessions interface {
 	Inbound(m *SMSMessage)
 }
 
-type Twilio interface {
-	Send(to, body string) (*twilio.Message, *twilio.Response, error)
+type SMS interface {
+	Send(to, body string) error
 }
 
 func NewLogger(out io.Writer) *log.Logger {
@@ -63,7 +62,7 @@ func NewSMSMux() *smsMux {
 	}
 }
 
-func (mux *smsMux) Start(ctx context.Context, db data.DB, twilio Twilio) {
+func (mux *smsMux) Start(ctx context.Context, db data.DB, sms SMS) {
 	timeouts := make(chan phoneNumber)
 
 Run:
@@ -76,13 +75,28 @@ Run:
 			if !sessionExists {
 				sessionInput := make(chan string)
 				sessionOutput := make(chan string)
-				go func() {
-					for o := range sessionOutput {
-						twilio.Send(string(m.From), o)
+
+				// We want to forward the strings on the output
+				// channel and send them as SMS
+				go func(out <-chan string, from phoneNumber, timeouts chan<- phoneNumber) {
+					for o := range out {
+						// use the SMS interface to send the message
+						err := sms.Send(string(from), o)
+
+						// timeout if error sending message
+						if err != nil {
+							timeouts <- from
+						}
 					}
-				}()
+				}(sessionOutput, m.From, timeouts)
+
+				u, err := models.UserForPhone(db, string(m.From))
+				if err != nil {
+					u = nil
+				}
 
 				session := &commandSession{
+					user:   u,
 					input:  sessionInput,
 					output: sessionOutput,
 					db:     db,
@@ -92,10 +106,12 @@ Run:
 				}
 				go session.start()
 
-				mux.sessions[m.From] = &commandSessionInfo{
+				sessionInfo = &commandSessionInfo{
 					input:   sessionInput,
 					session: session,
 				}
+
+				mux.sessions[m.From] = sessionInfo
 			}
 
 			// forward the message
@@ -141,12 +157,18 @@ type commandSession struct {
 }
 
 func (s *commandSession) start() {
+	if s.user == nil {
+		s.output <- "Looks like you don't have an account, sorry :("
+		s.timeout()
+	}
+
 	for i := range s.input {
 		// we block, so that the text ui can read in our absence
 		s.run(strings.Split(i, " "))
 	}
 }
 
+// assumes user is defined
 func (s *commandSession) run(args []string) {
 	// construct a new CLI with name and version
 	c := cli.NewCLI("elos", "0.0.1")
