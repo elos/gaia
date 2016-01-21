@@ -12,6 +12,7 @@ import (
 	"github.com/elos/elos/command"
 	"github.com/elos/models"
 	"github.com/mitchellh/cli"
+	"github.com/subosito/twilio"
 	"golang.org/x/net/context"
 )
 
@@ -33,6 +34,22 @@ type SMSCommandSessions interface {
 
 type SMS interface {
 	Send(to, body string) error
+}
+
+type twilioSMS struct {
+	c    *twilio.Client
+	from string
+}
+
+func SMSFromTwilio(c *twilio.Client, from string) SMS {
+	return &twilioSMS{
+		c: c,
+	}
+}
+
+func (t *twilioSMS) Send(to, body string) error {
+	_, _, err := t.c.Messages.SendSMS(t.from, to, body)
+	return err
 }
 
 func NewLogger(out io.Writer) *log.Logger {
