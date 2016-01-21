@@ -43,7 +43,8 @@ type twilioSMS struct {
 
 func SMSFromTwilio(c *twilio.Client, from string) SMS {
 	return &twilioSMS{
-		c: c,
+		c:    c,
+		from: from,
 	}
 }
 
