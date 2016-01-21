@@ -5,5 +5,6 @@ const (
 	Record      = "/record/"
 	RecordQuery = "/record/query/"
 	CommandSMS  = "/command/sms/"
-	CommandTXT  = "/command/txt/"
+	CommandWeb  = "/command/web/"
+	CommandiOS  = "/command/ios/"
 )

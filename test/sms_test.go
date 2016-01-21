@@ -56,7 +56,7 @@ func TestCommandSMS(t *testing.T) {
 	g := gaia.New(
 		&gaia.Middleware{},
 		&gaia.Services{
-			Logger:             &testLogger{t},
+			Logger:             services.NewTestLogger(t),
 			DB:                 db,
 			SMSCommandSessions: mux,
 		},
@@ -137,7 +137,7 @@ func TestCommandSMSInput(t *testing.T) {
 	g := gaia.New(
 		&gaia.Middleware{},
 		&gaia.Services{
-			Logger:             &testLogger{t},
+			Logger:             services.NewTestLogger(t),
 			DB:                 db,
 			SMSCommandSessions: mux,
 		},

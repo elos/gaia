@@ -18,25 +18,13 @@ import (
 	"github.com/elos/models"
 )
 
-type testLogger struct {
-	*testing.T
-}
-
-func (t *testLogger) Print(v ...interface{}) {
-	t.T.Log(v...)
-}
-
-func (t *testLogger) Printf(format string, v ...interface{}) {
-	t.T.Logf(format, v...)
-}
-
 func testInstance(t *testing.T) (data.DB, *gaia.Gaia, *httptest.Server) {
 	db := mem.NewDB()
 
 	g := gaia.New(
 		&gaia.Middleware{},
 		&gaia.Services{
-			Logger:             &testLogger{t},
+			Logger:             services.NewTestLogger(t),
 			DB:                 db,
 			SMSCommandSessions: services.NewSMSMux(),
 		},
