@@ -12,6 +12,7 @@ type Middleware struct {
 
 type Services struct {
 	services.DB
+	services.Logger
 	services.SMSCommandSessions
 }
 
@@ -26,6 +27,14 @@ func New(m *Middleware, s *Services) *Gaia {
 
 	if s.DB == nil {
 		log.Fatal("Service DB is nil")
+	}
+
+	if s.Logger == nil {
+		log.Fatal("Service Logger is nil")
+	}
+
+	if s.SMSCommandSessions == nil {
+		log.Fatal("Service SMSCommandSessions is nil")
 	}
 
 	return &Gaia{

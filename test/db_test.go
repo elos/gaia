@@ -11,7 +11,7 @@ import (
 )
 
 func TestDB(t *testing.T) {
-	db, _, s := testInstance()
+	db, _, s := testInstance(t)
 	defer s.Close()
 
 	user, cred := testUser(t, db)

@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 
-	"github.com/elos/api/services"
 	"github.com/elos/data"
+	"github.com/elos/gaia/services"
 	"github.com/elos/models"
 	"github.com/elos/models/access"
 	"golang.org/x/net/context"
@@ -23,24 +22,24 @@ func userFromContext(ctx context.Context) (*models.User, bool) {
 	return u, ok
 }
 
-func Authenticate(ctx context.Context, w http.ResponseWriter, r *http.Request, db services.DB) (context.Context, bool) {
+func Authenticate(ctx context.Context, w http.ResponseWriter, r *http.Request, l services.Logger, db services.DB) (context.Context, bool) {
 	public, private, ok := r.BasicAuth()
 	if !ok {
-		log.Print("Authentication failed: couldn't retrieve basic auth")
+		l.Print("Authentication failed: couldn't retrieve basic auth")
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return nil, false
 	}
 
 	cred, err := access.Authenticate(db, public, private)
 	if err != nil {
-		log.Print("Authentication failed: couldn't find credential")
+		l.Print("Authentication failed: couldn't find credential")
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return nil, false
 	}
 
 	u, err := cred.Owner(db)
 	if err != nil {
-		log.Print("Authentication failed: couldn't load user's owner")
+		l.Print("Authentication failed: couldn't load user's owner")
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return nil, false
 	}
@@ -51,9 +50,9 @@ func Authenticate(ctx context.Context, w http.ResponseWriter, r *http.Request, d
 const kindParam = "kind"
 const idParam = "id"
 
-func RecordGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db services.DB) {
+func RecordGET(ctx context.Context, w http.ResponseWriter, r *http.Request, l services.Logger, db services.DB) {
 	if err := r.ParseForm(); err != nil {
-		log.Printf("RecordGET Error: %s", err)
+		l.Printf("RecordGET Error: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -97,7 +96,7 @@ func RecordGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db s
 		case data.ErrInvalidID:
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		default:
-			log.Printf("RecordGET Error: %s", err)
+			l.Printf("RecordGET Error: %s", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
 		return
@@ -105,7 +104,7 @@ func RecordGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db s
 
 	user, ok := userFromContext(ctx)
 	if !ok {
-		log.Print("RecordGET Error: failed to retrieve user from context")
+		l.Print("RecordGET Error: failed to retrieve user from context")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -121,7 +120,7 @@ func RecordGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db s
 		case data.ErrInvalidID:
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		default:
-			log.Printf("RecordGET Error: %s", err)
+			l.Printf("RecordGET Error: %s", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
 		return
@@ -132,7 +131,7 @@ func RecordGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db s
 
 	bytes, err := json.MarshalIndent(m, "", "	")
 	if err != nil {
-		log.Printf("RecordGET Error: while marshalling json %s", err)
+		l.Printf("RecordGET Error: while marshalling json %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -144,9 +143,9 @@ func RecordGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db s
 // RecordPOST handles a 'POST' request to /records
 //
 // It has logging and CORS middleware applied to it
-func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db services.DB) {
+func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, l services.Logger, db services.DB) {
 	if err := r.ParseForm(); err != nil {
-		log.Printf("RecordPOST Error: %s", err)
+		l.Printf("RecordPOST Error: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -168,23 +167,23 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db 
 	m := models.ModelFor(kind)
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		log.Printf("RecordPOST Error: while reading request body, %s", err)
+		l.Printf("RecordPOST Error: while reading request body, %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	log.Print("Request Body:\n%s", string(body))
+	l.Print("Request Body:\n%s", string(body))
 
 	if err = json.Unmarshal(body, m); err != nil {
-		log.Printf("RecordPOST Info: request body:\n%s", string(body))
-		log.Printf("RecordPOST Error: while unmarshalling request body, %s", err)
+		l.Printf("RecordPOST Info: request body:\n%s", string(body))
+		l.Printf("RecordPOST Error: while unmarshalling request body, %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	user, ok := userFromContext(ctx)
 	if !ok {
-		log.Print("RecordPOST Error: failed to retrieve user from context")
+		l.Print("RecordPOST Error: failed to retrieve user from context")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -198,7 +197,7 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db 
 
 	if creation {
 		if allowed, err := access.CanCreate(db, user, m); err != nil {
-			log.Print("CanCreate Error: %s", err)
+			l.Print("CanCreate Error: %s", err)
 			switch err {
 			case data.ErrAccessDenial:
 				fallthrough // don't leak information
@@ -209,7 +208,7 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db 
 			case data.ErrInvalidID:
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			default:
-				log.Printf("RecordPOST Error: %s", err)
+				l.Printf("RecordPOST Error: %s", err)
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			}
 			return
@@ -219,7 +218,7 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db 
 		}
 	} else {
 		if allowed, err := access.CanWrite(db, user, m); err != nil {
-			log.Print("CanWrite Error: %s", err)
+			l.Print("CanWrite Error: %s", err)
 			switch err {
 			case data.ErrAccessDenial:
 				fallthrough // don't leak information
@@ -230,19 +229,19 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db 
 			case data.ErrInvalidID:
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			default:
-				log.Printf("RecordPOST Error: %s", err)
+				l.Printf("RecordPOST Error: %s", err)
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			}
 			return
 		} else if !allowed {
-			log.Print("write access denied")
+			l.Print("write access denied")
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
 	}
 
 	if err := db.Save(m); err != nil {
-		log.Print("Save Error: %s", err)
+		l.Print("Save Error: %s", err)
 		switch err {
 		case data.ErrAccessDenial:
 			fallthrough // don't leak information
@@ -253,7 +252,7 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db 
 		case data.ErrInvalidID:
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		default:
-			log.Printf("RecordPOST Error: %s", err)
+			l.Printf("RecordPOST Error: %s", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
 		return
@@ -261,7 +260,7 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db 
 
 	bytes, err := json.MarshalIndent(m, "", "    ")
 	if err != nil {
-		log.Printf("RecordPOST Error: %s", err)
+		l.Printf("RecordPOST Error: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -278,9 +277,9 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db 
 // RecordDELETE handles a 'DELETE' request to /records
 //
 // It has logging and CORS middleware applied to it.
-func RecordDELETE(ctx context.Context, w http.ResponseWriter, r *http.Request, db services.DB) {
+func RecordDELETE(ctx context.Context, w http.ResponseWriter, r *http.Request, l services.Logger, db services.DB) {
 	if err := r.ParseForm(); err != nil {
-		log.Printf("RecordDELETE Error: %s", err)
+		l.Printf("RecordDELETE Error: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -324,7 +323,7 @@ func RecordDELETE(ctx context.Context, w http.ResponseWriter, r *http.Request, d
 		case data.ErrInvalidID:
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		default:
-			log.Printf("RecordDELETE Error: %s", err)
+			l.Printf("RecordDELETE Error: %s", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
 		return
@@ -332,13 +331,13 @@ func RecordDELETE(ctx context.Context, w http.ResponseWriter, r *http.Request, d
 
 	user, ok := userFromContext(ctx)
 	if !ok {
-		log.Print("RecordDELETE Error: failed to retrieve user from context")
+		l.Print("RecordDELETE Error: failed to retrieve user from context")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	if allowed, err := access.CanDelete(db, user, m); err != nil {
-		log.Printf("RecordDELETE Error: %s", err)
+		l.Printf("RecordDELETE Error: %s", err)
 		http.Error(w, "database error", http.StatusInternalServerError)
 		return
 	} else if !allowed {
@@ -358,7 +357,7 @@ func RecordDELETE(ctx context.Context, w http.ResponseWriter, r *http.Request, d
 		case data.ErrInvalidID:
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		default:
-			log.Printf("RecordDELETE Error: %s", err)
+			l.Printf("RecordDELETE Error: %s", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
 		return
@@ -376,9 +375,9 @@ func RecordOPTIONS(ctx context.Context, w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusOK)
 }
 
-func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB) {
+func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, l services.Logger, db data.DB) {
 	if err := r.ParseForm(); err != nil {
-		log.Printf("RecordQueryPOST Error: %s", err)
+		l.Printf("RecordQueryPOST Error: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -399,7 +398,7 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 	defer r.Body.Close()
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		log.Printf("RecordQueryPOST Error: while reading request body, %s", err)
+		l.Printf("RecordQueryPOST Error: while reading request body, %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -407,15 +406,15 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 	attrs := make(data.AttrMap)
 
 	if err = json.Unmarshal(body, &attrs); err != nil {
-		log.Printf("RecordQueryPOST Info: request body:\n%s", string(body))
-		log.Printf("RecordQueryPOST Error: while unmarshalling request body, %s", err)
+		l.Printf("RecordQueryPOST Info: request body:\n%s", string(body))
+		l.Printf("RecordQueryPOST Error: while unmarshalling request body, %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	user, ok := userFromContext(ctx)
 	if !ok {
-		log.Print("RecordQueryPOST Error: failed to retrieve user from context")
+		l.Print("RecordQueryPOST Error: failed to retrieve user from context")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -424,7 +423,7 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 	q.Select(attrs)
 	iter, err := q.Execute()
 	if err != nil {
-		log.Printf("RecordQueryPOST Error: while executing query, %s", err)
+		l.Printf("RecordQueryPOST Error: while executing query, %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -433,7 +432,7 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 	m := models.ModelFor(kind)
 	for iter.Next(m) {
 		if ok, err := access.CanRead(db, user, m); err != nil {
-			log.Printf("RecordQueryPOST Error: while processing query, %s", err)
+			l.Printf("RecordQueryPOST Error: while processing query, %s", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		} else if ok {
@@ -443,14 +442,14 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 	}
 
 	if err := iter.Close(); err != nil {
-		log.Printf("RecordQueryPOST Error: while loading query, %s", err)
+		l.Printf("RecordQueryPOST Error: while loading query, %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	returnBody, err := json.Marshal(results)
 	if err != nil {
-		log.Printf("RecordQueryPOST Error: while loading query, %s", err)
+		l.Printf("RecordQueryPOST Error: while loading query, %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}

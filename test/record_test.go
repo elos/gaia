@@ -17,13 +17,27 @@ import (
 	"github.com/elos/models"
 )
 
-func testInstance() (data.DB, *gaia.Gaia, *httptest.Server) {
+type testLogger struct {
+	*testing.T
+}
+
+func (t *testLogger) Print(v ...interface{}) {
+	t.T.Log(v...)
+}
+
+func (t *testLogger) Printf(format string, v ...interface{}) {
+	t.T.Logf(format, v...)
+}
+
+func testInstance(t *testing.T) (data.DB, *gaia.Gaia, *httptest.Server) {
 	db := mem.NewDB()
 
 	g := gaia.New(
 		&gaia.Middleware{},
 		&gaia.Services{
-			DB: db,
+			Logger:             &testLogger{t},
+			DB:                 db,
+			SMSCommandSessions: newMockSMSSessions(),
 		},
 	)
 
@@ -33,24 +47,8 @@ func testInstance() (data.DB, *gaia.Gaia, *httptest.Server) {
 }
 
 func testUser(t *testing.T, db data.DB) (*models.User, *models.Credential) {
-	u := models.NewUser()
-	u.SetID(db.NewID())
-	u.CreatedAt = time.Now()
-	u.UpdatedAt = time.Now()
-
-	c := models.NewCredential()
-	c.SetID(db.NewID())
-	c.CreatedAt = time.Now()
-	c.UpdatedAt = time.Now()
-	c.Public = "public"
-	c.Private = "private"
-	c.OwnerId = u.Id
-
-	if err := db.Save(u); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := db.Save(c); err != nil {
+	u, c, err := models.CreateUser(db, "public", "private")
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -58,7 +56,7 @@ func testUser(t *testing.T, db data.DB) (*models.User, *models.Credential) {
 }
 
 func TestRecordGet(t *testing.T) {
-	db, _, s := testInstance()
+	db, _, s := testInstance(t)
 	defer s.Close()
 
 	user, cred := testUser(t, db)
@@ -110,7 +108,7 @@ func TestRecordGet(t *testing.T) {
 }
 
 func TestRecordPost(t *testing.T) {
-	db, _, s := testInstance()
+	db, _, s := testInstance(t)
 	defer s.Close()
 
 	user, cred := testUser(t, db)
@@ -180,7 +178,7 @@ func TestRecordPost(t *testing.T) {
 }
 
 func TestRecordDELETE(t *testing.T) {
-	db, _, s := testInstance()
+	db, _, s := testInstance(t)
 	defer s.Close()
 
 	user, cred := testUser(t, db)
@@ -236,7 +234,7 @@ func TestRecordDELETE(t *testing.T) {
 }
 
 func TestRecordQuery(t *testing.T) {
-	db, _, s := testInstance()
+	db, _, s := testInstance(t)
 	defer s.Close()
 
 	user, cred := testUser(t, db)

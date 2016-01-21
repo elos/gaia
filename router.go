@@ -1,17 +1,26 @@
 package gaia
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/elos/gaia/routes"
+	"github.com/elos/gaia/services"
 	"golang.org/x/net/context"
 )
+
+// basic logging
+func logRequest(handle http.HandlerFunc, logger services.Logger) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		logger.Printf("%s %s", r.Method, r.URL)
+		handle(w, r)
+	}
+}
 
 func router(m *Middleware, s *Services) http.Handler {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc(routes.Register, func(w http.ResponseWriter, r *http.Request) {
+	// /register/
+	mux.HandleFunc(routes.Register, logRequest(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
 			routes.RegisterPOST(context.Background(), w, r, s.DB)
@@ -19,61 +28,58 @@ func router(m *Middleware, s *Services) http.Handler {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
 		}
-	})
+	}, s.Logger))
 
-	mux.HandleFunc(routes.Record, func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s", r.Method, routes.Record)
-
-		ctx, ok := routes.Authenticate(context.Background(), w, r, s.DB)
+	// /record/
+	mux.HandleFunc(routes.Record, logRequest(func(w http.ResponseWriter, r *http.Request) {
+		ctx, ok := routes.Authenticate(context.Background(), w, r, s.Logger, s.DB)
 		if !ok {
 			return
 		}
 
 		switch r.Method {
 		case "GET":
-			routes.RecordGET(ctx, w, r, s.DB)
+			routes.RecordGET(ctx, w, r, s.Logger, s.DB)
 		case "POST":
-			routes.RecordPOST(ctx, w, r, s.DB)
+			routes.RecordPOST(ctx, w, r, s.Logger, s.DB)
 		case "DELETE":
-			routes.RecordDELETE(ctx, w, r, s.DB)
+			routes.RecordDELETE(ctx, w, r, s.Logger, s.DB)
 		case "OPTIONS":
 			routes.RecordOPTIONS(ctx, w, r)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
 		}
-	})
+	}, s.Logger))
 
-	mux.HandleFunc(routes.RecordQuery, func(w http.ResponseWriter, r *http.Request) {
-		log.Print("%s %s", r.Method, routes.RecordQuery)
-
-		ctx, ok := routes.Authenticate(context.Background(), w, r, s.DB)
+	// /record/query/
+	mux.HandleFunc(routes.RecordQuery, logRequest(func(w http.ResponseWriter, r *http.Request) {
+		ctx, ok := routes.Authenticate(context.Background(), w, r, s.Logger, s.DB)
 		if !ok {
 			return
 		}
 
 		switch r.Method {
 		case "POST":
-			routes.RecordQueryPOST(ctx, w, r, s.DB)
+			routes.RecordQueryPOST(ctx, w, r, s.Logger, s.DB)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
 		}
-	})
+	}, s.Logger))
 
-	mux.HandleFunc(routes.CommandSMS, func(w http.ResponseWriter, r *http.Request) {
-		log.Print("%s %s", r.Method, routes.RecordQuery)
-
+	// /command/sms/
+	mux.HandleFunc(routes.CommandSMS, logRequest(func(w http.ResponseWriter, r *http.Request) {
 		ctx := context.Background()
 
 		switch r.Method {
 		case "POST":
-			routes.CommandSMSPOST(ctx, w, r, s.SMSCommandSessions)
+			routes.CommandSMSPOST(ctx, w, r, s.Logger, s.SMSCommandSessions)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
 		}
-	})
+	}, s.Logger))
 
 	return mux
 }

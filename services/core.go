@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -15,6 +16,14 @@ import (
 	"golang.org/x/net/context"
 )
 
+// satisfied by *log.Logger
+type Logger interface {
+	Fatal(v ...interface{})
+	Fatalf(format string, v ...interface{})
+	Print(v ...interface{})
+	Printf(format string, v ...interface{})
+}
+
 type DB interface {
 	data.DB
 }
@@ -25,6 +34,10 @@ type SMSCommandSessions interface {
 
 type Twilio interface {
 	Send(to, body string) (*twilio.Message, *twilio.Response, error)
+}
+
+func NewLogger(out io.Writer) *log.Logger {
+	return log.New(out, "", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
 type phoneNumber string
