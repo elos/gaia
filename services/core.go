@@ -49,6 +49,9 @@ func SMSFromTwilio(c *twilio.Client, from string) SMS {
 
 func (t *twilioSMS) Send(to, body string) error {
 	_, _, err := t.c.Messages.SendSMS(t.from, to, body)
+	if err != nil {
+		log.Printf("*twilioSMS.Send Error: %s", err)
+	}
 	return err
 }
 
@@ -97,12 +100,15 @@ Run:
 				// channel and send them as SMS
 				go func(out <-chan string, from phoneNumber, timeouts chan<- phoneNumber) {
 					for o := range out {
+						log.Printf("should try to send: '%s'", o)
 						// use the SMS interface to send the message
 						err := sms.Send(string(from), o)
 
 						// timeout if error sending message
 						if err != nil {
+							log.Print("Read off bailing")
 							timeouts <- from
+							return
 						}
 					}
 				}(sessionOutput, m.From, timeouts)
