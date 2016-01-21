@@ -25,8 +25,10 @@ func main() {
 	count := 0
 	t := models.NewTask()
 	for iter.Next(t) {
-		t.CompletedAt = t.UpdatedAt
-		count++
+		if t.Complete {
+			t.CompletedAt = t.UpdatedAt
+			count++
+		}
 	}
 
 	log.Print("Migrated %d tasks", count)
