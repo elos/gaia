@@ -8,10 +8,11 @@ import (
 	"github.com/elos/data"
 	"github.com/elos/gaia"
 	"github.com/elos/models"
+	"golang.org/x/net/context"
 )
 
 func TestDB(t *testing.T) {
-	db, _, s := testInstance(t)
+	db, _, s := testInstance(t, context.Background())
 	defer s.Close()
 
 	user, cred := testUser(t, db)

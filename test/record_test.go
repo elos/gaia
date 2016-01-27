@@ -14,14 +14,18 @@ import (
 	"github.com/elos/data"
 	"github.com/elos/data/builtin/mem"
 	"github.com/elos/gaia"
+	"github.com/elos/gaia/routes"
 	"github.com/elos/gaia/services"
 	"github.com/elos/models"
+	"golang.org/x/net/context"
+	"golang.org/x/net/websocket"
 )
 
-func testInstance(t *testing.T) (data.DB, *gaia.Gaia, *httptest.Server) {
+func testInstance(t *testing.T, ctx context.Context) (data.DB, *gaia.Gaia, *httptest.Server) {
 	db := mem.NewDB()
 
 	g := gaia.New(
+		ctx,
 		&gaia.Middleware{},
 		&gaia.Services{
 			Logger:             services.NewTestLogger(t),
@@ -46,7 +50,7 @@ func testUser(t *testing.T, db data.DB) (*models.User, *models.Credential) {
 }
 
 func TestRecordGet(t *testing.T) {
-	db, _, s := testInstance(t)
+	db, _, s := testInstance(t, context.Background())
 	defer s.Close()
 
 	user, cred := testUser(t, db)
@@ -98,7 +102,7 @@ func TestRecordGet(t *testing.T) {
 }
 
 func TestRecordPost(t *testing.T) {
-	db, _, s := testInstance(t)
+	db, _, s := testInstance(t, context.Background())
 	defer s.Close()
 
 	user, cred := testUser(t, db)
@@ -168,7 +172,7 @@ func TestRecordPost(t *testing.T) {
 }
 
 func TestRecordDELETE(t *testing.T) {
-	db, _, s := testInstance(t)
+	db, _, s := testInstance(t, context.Background())
 	defer s.Close()
 
 	user, cred := testUser(t, db)
@@ -224,7 +228,7 @@ func TestRecordDELETE(t *testing.T) {
 }
 
 func TestRecordQuery(t *testing.T) {
-	db, _, s := testInstance(t)
+	db, _, s := testInstance(t, context.Background())
 	defer s.Close()
 
 	user, cred := testUser(t, db)
@@ -280,5 +284,73 @@ func TestRecordQuery(t *testing.T) {
 
 	if !strings.Contains(string(body), taskName) {
 		t.Fatal("Response body should have contained the task name")
+	}
+}
+
+type taskChange struct {
+	Record models.Task
+	data.ChangeKind
+}
+
+func TestRecordChanges(t *testing.T) {
+	ctx, cancelAllConnections := context.WithCancel(context.Background())
+	defer cancelAllConnections()
+
+	db, _, s := testInstance(t, ctx)
+	defer s.Close()
+
+	user, cred := testUser(t, db)
+
+	serverURL := s.URL
+	origin := serverURL
+	wsURL := strings.Replace(serverURL, "http", "ws", 1)
+
+	params := url.Values{}
+	params.Set("public", cred.Public)
+	params.Set("private", cred.Private)
+	params.Set("kind", models.TaskKind.String())
+	wsURL += routes.RecordChanges + "?" + params.Encode()
+	t.Logf("Constructed URL: %s", wsURL)
+
+	t.Log("Opening websocket")
+	ws, err := websocket.Dial(wsURL, "", origin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ws.Close()
+	t.Log("Websocket openened")
+
+	time.Sleep(500 * time.Millisecond)
+
+	t.Log("Creating task")
+	taskName := "task to retreive"
+	task := models.NewTask()
+	task.SetID(db.NewID())
+	task.CreatedAt = time.Now()
+	task.OwnerId = user.Id
+	task.Name = taskName
+	task.UpdatedAt = time.Now()
+	if err := db.Save(task); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("Task created")
+
+	var tc taskChange
+	if err := websocket.JSON.Receive(ws, &tc); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Logf("Task Change Recieved: %++v", tc)
+
+	t.Log("Cancelling the connection")
+	cancelAllConnections()
+	t.Log("\tcancelled")
+
+	if tc.ChangeKind != data.Update {
+		t.Fatal("Expected ChangeKind to be Update")
+	}
+
+	if tc.Record.Name != taskName {
+		t.Fatalf("Expected task name to be: '%s'", taskName)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/elos/gaia/services"
+	"golang.org/x/net/context"
 )
 
 type Middleware struct {
@@ -21,10 +22,11 @@ type Gaia struct {
 	mux http.Handler
 	*Middleware
 	*Services
+	cancelAll func()
 }
 
-func New(m *Middleware, s *Services) *Gaia {
-	mux := router(m, s)
+func New(ctx context.Context, m *Middleware, s *Services) *Gaia {
+	mux, cancelAll := router(ctx, m, s)
 
 	if s.DB == nil {
 		log.Fatal("Service DB is nil")
@@ -38,15 +40,16 @@ func New(m *Middleware, s *Services) *Gaia {
 		log.Fatal("Service SMSCommandSessions is nil")
 	}
 
-	if s.WebCommandSessions == nil {
-		log.Fatal("Service WebCommandSessions is nil")
-	}
-
 	return &Gaia{
 		mux:        mux,
 		Middleware: m,
 		Services:   s,
+		cancelAll:  cancelAll,
 	}
+}
+
+func (gaia *Gaia) Close() {
+	gaia.cancelAll()
 }
 
 func (gaia *Gaia) ServeHTTP(w http.ResponseWriter, r *http.Request) {

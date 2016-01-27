@@ -53,7 +53,11 @@ func TestCommandSMS(t *testing.T) {
 
 	go mux.Start(ctx, db, sms)
 
+	ctx, cancelContext := context.WithCancel(context.Background())
+	defer cancelContext()
+
 	g := gaia.New(
+		ctx,
 		&gaia.Middleware{},
 		&gaia.Services{
 			Logger:             services.NewTestLogger(t),
@@ -135,7 +139,11 @@ func TestCommandSMSInput(t *testing.T) {
 
 	go mux.Start(ctx, db, sms)
 
+	ctx, cancelContext := context.WithCancel(context.Background())
+	defer cancelContext()
+
 	g := gaia.New(
+		ctx,
 		&gaia.Middleware{},
 		&gaia.Services{
 			Logger:             services.NewTestLogger(t),

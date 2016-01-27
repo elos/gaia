@@ -17,14 +17,15 @@ func logRequest(handle http.HandlerFunc, logger services.Logger) http.HandlerFun
 	}
 }
 
-func router(m *Middleware, s *Services) http.Handler {
+func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, context.CancelFunc) {
 	mux := http.NewServeMux()
+	requestBackground, cancelAll := context.WithCancel(ctx)
 
 	// /register/
 	mux.HandleFunc(routes.Register, logRequest(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
-			routes.RegisterPOST(context.Background(), w, r, s.DB)
+			routes.RegisterPOST(requestBackground, w, r, s.DB)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
@@ -33,7 +34,7 @@ func router(m *Middleware, s *Services) http.Handler {
 
 	// /record/
 	mux.HandleFunc(routes.Record, logRequest(func(w http.ResponseWriter, r *http.Request) {
-		ctx, ok := routes.Authenticate(context.Background(), w, r, s.Logger, s.DB)
+		ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
 		if !ok {
 			return
 		}
@@ -55,7 +56,7 @@ func router(m *Middleware, s *Services) http.Handler {
 
 	// /record/query/
 	mux.HandleFunc(routes.RecordQuery, logRequest(func(w http.ResponseWriter, r *http.Request) {
-		ctx, ok := routes.Authenticate(context.Background(), w, r, s.Logger, s.DB)
+		ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
 		if !ok {
 			return
 		}
@@ -69,9 +70,14 @@ func router(m *Middleware, s *Services) http.Handler {
 		}
 	}, s.Logger))
 
+	// /record/changes/
+	mux.HandleFunc(routes.RecordChanges, logRequest(websocket.Handler(
+		routes.ContextualizeRecordChangesGET(requestBackground, s.DB, s.Logger),
+	).ServeHTTP, s.Logger))
+
 	// /command/sms/
 	mux.HandleFunc(routes.CommandSMS, logRequest(func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.Background()
+		ctx := requestBackground
 
 		switch r.Method {
 		case "POST":
@@ -84,8 +90,8 @@ func router(m *Middleware, s *Services) http.Handler {
 
 	// /command/web/
 	mux.HandleFunc(routes.CommandWeb, logRequest(websocket.Handler(
-		routes.ContextualizeCommandWebGET(s.DB, s.Logger),
+		routes.ContextualizeCommandWebGET(requestBackground, s.DB, s.Logger),
 	).ServeHTTP, s.Logger))
 
-	return mux
+	return mux, cancelAll
 }

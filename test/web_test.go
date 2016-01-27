@@ -27,7 +27,11 @@ func TestCommandWeb(t *testing.T) {
 	go smsMux.Start(ctx, db, sms)
 	go webMux.Start(ctx, db)
 
+	ctx, cancelContext := context.WithCancel(context.Background())
+	defer cancelContext()
+
 	g := gaia.New(
+		ctx,
 		&gaia.Middleware{},
 		&gaia.Services{
 			Logger:             services.NewTestLogger(t),

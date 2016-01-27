@@ -10,10 +10,11 @@ import (
 
 	"github.com/elos/data"
 	"github.com/elos/models"
+	"golang.org/x/net/context"
 )
 
 func TestRegisterPOST(t *testing.T) {
-	db, _, s := testInstance(t)
+	db, _, s := testInstance(t, context.Background())
 	defer s.Close()
 
 	username, password := "public", "private"

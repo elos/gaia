@@ -3,6 +3,7 @@ package routes
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/elos/models"
 	"github.com/elos/models/access"
 	"golang.org/x/net/context"
+	"golang.org/x/net/websocket"
 )
 
 type key int
@@ -456,4 +458,82 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 
 	w.WriteHeader(http.StatusOK)
 	w.Write(returnBody)
+}
+
+func ContextualizeRecordChangesGET(ctx context.Context, db data.DB, logger services.Logger) websocket.Handler {
+	return func(ws *websocket.Conn) {
+		if err := ws.Request().ParseForm(); err != nil {
+			logger.Print("Failure parsing form")
+			return
+		}
+		public := ws.Request().Form.Get("public")
+		private := ws.Request().Form.Get("private")
+
+		if public == "" || private == "" {
+			logger.Print("failed to retrieve credentials")
+			return
+		}
+
+		cred, err := access.Authenticate(db, public, private)
+		if err != nil {
+			logger.Print("failed to auth")
+			return
+		}
+
+		u, _ := cred.Owner(db)
+		RecordChangesGET(context.WithValue(ctx, userKey, u), ws, db, logger)
+	}
+}
+
+func RecordChangesGET(ctx context.Context, ws *websocket.Conn, db data.DB, logger services.Logger) {
+	user, ok := userFromContext(ctx)
+	if !ok {
+		logger.Print("RecordChangesGET Error: failed to retrieve user from context")
+		return
+	}
+
+	var kind data.Kind
+	kindParam := ws.Request().Form.Get("kind")
+
+	if kindParam != "" {
+		kind = data.Kind(kindParam)
+		if _, ok := models.Kinds[kind]; !ok {
+			logger.Printf("RecordChangesGET Error: unrecognized kind: '%s':", kind)
+			websocket.Message.Send(ws, fmt.Sprintf("The kind '%s' is not recognized", kind))
+			return
+		}
+	}
+
+	// Get the db's changes, then filter by updates, then
+	// filter by whether this user can read the record
+	changes := data.Filter(db.Changes(), func(c *data.Change) bool {
+		ok, _ := access.CanRead(db, user, c.Record)
+		return ok
+	})
+
+	// If a kind was specified, filter by than
+	if kind != data.Kind("") {
+		changes = data.FilterKind(changes, kind)
+	}
+
+	for {
+		select {
+		case change, ok := <-*changes:
+			// channels was closed
+			if !ok {
+				return
+			}
+
+			if err := websocket.JSON.Send(ws, change); err != nil {
+				if err != io.EOF {
+					logger.Printf("Error reading from socket: %s", err)
+				}
+
+				return
+			}
+		case <-ctx.Done():
+			// context was cancelled
+			return
+		}
+	}
 }

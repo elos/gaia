@@ -29,9 +29,8 @@ func CommandSMSPOST(ctx context.Context, w http.ResponseWriter, r *http.Request,
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func ContextualizeCommandWebGET(db data.DB, logger services.Logger) websocket.Handler {
+func ContextualizeCommandWebGET(ctx context.Context, db data.DB, logger services.Logger) websocket.Handler {
 	return func(c *websocket.Conn) {
-		ctx := context.Background()
 
 		if err := c.Request().ParseForm(); err != nil {
 			logger.Print("Failure parsing form")
@@ -71,6 +70,7 @@ func CommandWebGET(ctx context.Context, ws *websocket.Conn, logger services.Logg
 	session := command.NewSession(
 		user, db, input, output,
 		func() {
+			log.Print("CommandWebGET bail")
 			close(output)
 		},
 	)
@@ -81,7 +81,6 @@ func CommandWebGET(ctx context.Context, ws *websocket.Conn, logger services.Logg
 		for {
 			var message string
 			err := websocket.Message.Receive(ws, &message)
-			log.Printf("Recieved: %s", message)
 
 			if err != nil {
 				if err != io.EOF {
@@ -97,7 +96,6 @@ func CommandWebGET(ctx context.Context, ws *websocket.Conn, logger services.Logg
 	}()
 
 	for o := range output {
-		log.Printf("Sending: %s", o)
 		err := websocket.Message.Send(ws, o)
 
 		if err != nil {
