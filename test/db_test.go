@@ -138,4 +138,25 @@ func TestDB(t *testing.T) {
 	}
 
 	t.Log("Examined")
+
+	changes := db.Changes()
+
+	eventName := "hello"
+	e := models.NewEvent()
+	e.SetID(db.NewID())
+	e.SetOwner(user)
+	e.Name = eventName
+	if err := db.Save(e); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case c := <-*changes:
+		t.Logf("Change received:\n%++v", c)
+		if c.Record.(*models.Event).Name != eventName {
+			t.Fatalf("Change should have been recieved with event record and name '%s'", eventName)
+		}
+	case <-time.After(50 * time.Millisecond):
+		t.Fatalf("Timed out waiting for change")
+	}
 }

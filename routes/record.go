@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 
 	"github.com/elos/data"
@@ -519,6 +520,7 @@ func RecordChangesGET(ctx context.Context, ws *websocket.Conn, db data.DB, logge
 	for {
 		select {
 		case change, ok := <-*changes:
+			log.Printf("Recieved Change: %+v", change)
 			// channels was closed
 			if !ok {
 				return

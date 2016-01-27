@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/elos/data"
 	"github.com/elos/data/builtin/mem"
@@ -15,6 +16,7 @@ import (
 	"github.com/elos/data/transfer"
 	"github.com/elos/gaia/routes"
 	"github.com/elos/models"
+	"golang.org/x/net/websocket"
 )
 
 func recordEndpoint(host string) string {
@@ -23,6 +25,10 @@ func recordEndpoint(host string) string {
 
 func recordQueryEndpoint(host string) string {
 	return host + routes.RecordQuery
+}
+
+func recordChangesEndpoint(host string) string {
+	return host + routes.RecordChanges
 }
 
 // DB implements the data.DB interface, and communicates over HTTP
@@ -38,6 +44,10 @@ func (db *DB) recordURL(v url.Values) string {
 
 func (db *DB) recordQueryURL(v url.Values) string {
 	return recordQueryEndpoint(db.URL) + "?" + v.Encode()
+}
+
+func (db *DB) recordChangesURL(v url.Values) string {
+	return strings.Replace(recordChangesEndpoint(db.URL), "http", "ws", 1) + "?" + v.Encode()
 }
 
 func (db *DB) get(url string) (*http.Response, error) {
@@ -336,8 +346,44 @@ func (q *query) Select(attrs data.AttrMap) data.Query {
 	return q
 }
 
+type eventChange struct {
+	Record models.Event
+	data.ChangeKind
+}
+
+// TODO: (make this not only events)
 func (db *DB) Changes() *chan *data.Change {
-	panic("")
+	ch := make(chan *data.Change)
+
+	go func() {
+		// setup Params
+		wsURL := db.recordChangesURL(url.Values{
+			"public":  []string{db.Username},
+			"private": []string{db.Password},
+			"kind":    []string{models.EventKind.String()},
+		})
+
+		ws, err := websocket.Dial(wsURL, "", db.URL)
+		if err != nil {
+			log.Print("FAILED TO CONNECT TO GAIA")
+			close(ch)
+			return
+		}
+		defer ws.Close()
+
+		var ec eventChange
+		for {
+			if err := websocket.JSON.Receive(ws, &ec); err != nil {
+				log.Print("FAILED TO RECIEVE FROM GAIA")
+				close(ch)
+				return
+			}
+
+			ch <- data.NewChange(ec.ChangeKind, &ec.Record)
+		}
+	}()
+
+	return &ch
 }
 
 // --- }}}
