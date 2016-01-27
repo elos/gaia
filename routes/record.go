@@ -505,6 +505,13 @@ func RecordChangesGET(ctx context.Context, ws *websocket.Conn, db data.DB, logge
 		}
 	}
 
+	audit := db.Changes()
+	go func() {
+		for c := range *audit {
+			log.Printf("[AUDIT]: \n %+v", c)
+		}
+	}()
+
 	// Get the db's changes, then filter by updates, then
 	// filter by whether this user can read the record
 	changes := data.Filter(db.Changes(), func(c *data.Change) bool {
