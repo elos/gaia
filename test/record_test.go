@@ -27,6 +27,7 @@ func testInstance(t *testing.T) (data.DB, *gaia.Gaia, *httptest.Server) {
 			Logger:             services.NewTestLogger(t),
 			DB:                 db,
 			SMSCommandSessions: services.NewSMSMux(),
+			WebCommandSessions: services.NewWebMux(),
 		},
 	)
 

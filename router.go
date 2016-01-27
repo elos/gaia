@@ -6,6 +6,7 @@ import (
 	"github.com/elos/gaia/routes"
 	"github.com/elos/gaia/services"
 	"golang.org/x/net/context"
+	"golang.org/x/net/websocket"
 )
 
 // basic logging
@@ -81,23 +82,10 @@ func router(m *Middleware, s *Services) http.Handler {
 		}
 	}, s.Logger))
 
-	/* // /command/web/
-	mux.HandleFunc(routes.CommandWeb, logRequest(func(w http.ResponseWriter, r *http.Request) {
-		ctx, ok := routes.Authenticate(context.Background(), w, r, s.Logger, s.DB)
-		if !ok {
-			return
-		}
-
-		switch r.Method {
-		case "GET":
-			routes.CommandWebPOST(ctx, w, r, s.Logger, s.WebCommandSessions)
-		default:
-			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-			return
-		}
-
-	}, s.Logger))
-	*/
+	// /command/web/
+	mux.HandleFunc(routes.CommandWeb, logRequest(websocket.Handler(
+		routes.ContextualizeCommandWebGET(s.DB, s.Logger),
+	).ServeHTTP, s.Logger))
 
 	return mux
 }

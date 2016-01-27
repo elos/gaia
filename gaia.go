@@ -14,6 +14,7 @@ type Services struct {
 	services.DB
 	services.Logger
 	services.SMSCommandSessions
+	services.WebCommandSessions
 }
 
 type Gaia struct {
@@ -35,6 +36,10 @@ func New(m *Middleware, s *Services) *Gaia {
 
 	if s.SMSCommandSessions == nil {
 		log.Fatal("Service SMSCommandSessions is nil")
+	}
+
+	if s.WebCommandSessions == nil {
+		log.Fatal("Service WebCommandSessions is nil")
 	}
 
 	return &Gaia{

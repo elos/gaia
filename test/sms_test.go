@@ -59,6 +59,7 @@ func TestCommandSMS(t *testing.T) {
 			Logger:             services.NewTestLogger(t),
 			DB:                 db,
 			SMSCommandSessions: mux,
+			WebCommandSessions: services.NewWebMux(),
 		},
 	)
 
@@ -140,6 +141,7 @@ func TestCommandSMSInput(t *testing.T) {
 			Logger:             services.NewTestLogger(t),
 			DB:                 db,
 			SMSCommandSessions: mux,
+			WebCommandSessions: services.NewWebMux(),
 		},
 	)
 

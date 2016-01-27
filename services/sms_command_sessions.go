@@ -48,13 +48,13 @@ Run:
 				// channel and send them as SMS
 				go func(out <-chan string, from sms.PhoneNumber, timeouts chan<- sms.PhoneNumber) {
 					for o := range out {
-						log.Printf("should try to send: '%s'", o)
 						// use the SMS interface to send the message
 						err := sender.Send(string(from), o)
 
 						// timeout if error sending message
 						if err != nil {
 							log.Print("Read off bailing")
+							close(sessionInput)
 							timeouts <- from
 							return
 						}
