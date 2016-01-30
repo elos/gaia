@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/elos/data"
-	"github.com/elos/models"
+	"github.com/elos/models/user"
 	"golang.org/x/net/context"
 )
 
@@ -32,7 +32,7 @@ func RegisterPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, d
 		return
 	}
 
-	u, _, err := models.CreateUser(db, username[0], password[0])
+	u, _, err := user.Create(db, username[0], password[0])
 	if err != nil {
 		log.Printf("RegisterPOST Error: creating user: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)

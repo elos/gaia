@@ -6,7 +6,7 @@ import (
 	"github.com/elos/data"
 	"github.com/elos/elos/command"
 	"github.com/elos/gaia/services/sms"
-	"github.com/elos/models"
+	"github.com/elos/models/user"
 	"golang.org/x/net/context"
 )
 
@@ -61,7 +61,7 @@ Run:
 					}
 				}(sessionOutput, m.From, timeouts)
 
-				u, err := models.UserForPhone(db, string(m.From))
+				u, err := user.ForPhone(db, string(m.From))
 				if err != nil {
 					u = nil
 				}

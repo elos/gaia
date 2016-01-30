@@ -10,6 +10,7 @@ import (
 	"github.com/elos/gaia/services"
 	"github.com/elos/gaia/services/sms"
 	"github.com/elos/models/access"
+	"github.com/elos/models/user"
 	"golang.org/x/net/context"
 	"golang.org/x/net/websocket"
 )
@@ -52,13 +53,13 @@ func ContextualizeCommandWebGET(ctx context.Context, db data.DB, logger services
 		}
 
 		u, _ := cred.Owner(db)
-		CommandWebGET(context.WithValue(ctx, userKey, u), c, logger, db)
+		CommandWebGET(user.NewContext(ctx, u), c, logger, db)
 	}
 }
 
 // Expects: the context to hold the authed user
 func CommandWebGET(ctx context.Context, ws *websocket.Conn, logger services.Logger, db data.DB) {
-	user, ok := userFromContext(ctx)
+	u, ok := user.FromContext(ctx)
 	if !ok {
 		logger.Print("CommandWebGET Error: failed to retrieve user from context")
 		return
@@ -68,7 +69,7 @@ func CommandWebGET(ctx context.Context, ws *websocket.Conn, logger services.Logg
 	output := make(chan string)
 
 	session := command.NewSession(
-		user, db, input, output,
+		u, db, input, output,
 		func() {
 			log.Print("CommandWebGET bail")
 			close(output)

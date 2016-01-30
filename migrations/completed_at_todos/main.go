@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/elos/models"
+	"github.com/elos/models/task"
 )
 
 func main() {
@@ -25,8 +26,13 @@ func main() {
 	count := 0
 	t := models.NewTask()
 	for iter.Next(t) {
-		if t.Complete {
+		if task.IsComplete(t) {
 			t.CompletedAt = t.UpdatedAt
+
+			if err := db.Save(t); err != nil {
+				log.Fatal(err)
+			}
+
 			count++
 		}
 	}

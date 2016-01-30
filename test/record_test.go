@@ -17,6 +17,7 @@ import (
 	"github.com/elos/gaia/routes"
 	"github.com/elos/gaia/services"
 	"github.com/elos/models"
+	"github.com/elos/models/user"
 	"golang.org/x/net/context"
 	"golang.org/x/net/websocket"
 )
@@ -41,7 +42,7 @@ func testInstance(t *testing.T, ctx context.Context) (data.DB, *gaia.Gaia, *http
 }
 
 func testUser(t *testing.T, db data.DB) (*models.User, *models.Credential) {
-	u, c, err := models.CreateUser(db, "public", "private")
+	u, c, err := user.Create(db, "public", "private")
 	if err != nil {
 		t.Fatal(err)
 	}

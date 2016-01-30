@@ -12,18 +12,10 @@ import (
 	"github.com/elos/gaia/services"
 	"github.com/elos/models"
 	"github.com/elos/models/access"
+	"github.com/elos/models/user"
 	"golang.org/x/net/context"
 	"golang.org/x/net/websocket"
 )
-
-type key int
-
-var userKey key = 0
-
-func userFromContext(ctx context.Context) (*models.User, bool) {
-	u, ok := ctx.Value(userKey).(*models.User)
-	return u, ok
-}
 
 func Authenticate(ctx context.Context, w http.ResponseWriter, r *http.Request, l services.Logger, db services.DB) (context.Context, bool) {
 	public, private, ok := r.BasicAuth()
@@ -47,7 +39,7 @@ func Authenticate(ctx context.Context, w http.ResponseWriter, r *http.Request, l
 		return nil, false
 	}
 
-	return context.WithValue(ctx, userKey, u), true
+	return user.NewContext(ctx, u), true
 }
 
 const kindParam = "kind"
@@ -105,14 +97,14 @@ func RecordGET(ctx context.Context, w http.ResponseWriter, r *http.Request, l se
 		return
 	}
 
-	user, ok := userFromContext(ctx)
+	u, ok := user.FromContext(ctx)
 	if !ok {
 		l.Print("RecordGET Error: failed to retrieve user from context")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	if allowed, err := access.CanRead(db, user, m); err != nil {
+	if allowed, err := access.CanRead(db, u, m); err != nil {
 		switch err {
 		case data.ErrAccessDenial:
 			fallthrough // don't leak information
@@ -184,7 +176,7 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, l s
 		return
 	}
 
-	user, ok := userFromContext(ctx)
+	u, ok := user.FromContext(ctx)
 	if !ok {
 		l.Print("RecordPOST Error: failed to retrieve user from context")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -199,7 +191,7 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, l s
 	}
 
 	if creation {
-		if allowed, err := access.CanCreate(db, user, m); err != nil {
+		if allowed, err := access.CanCreate(db, u, m); err != nil {
 			l.Print("CanCreate Error: %s", err)
 			switch err {
 			case data.ErrAccessDenial:
@@ -220,7 +212,7 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, l s
 			return
 		}
 	} else {
-		if allowed, err := access.CanWrite(db, user, m); err != nil {
+		if allowed, err := access.CanWrite(db, u, m); err != nil {
 			l.Print("CanWrite Error: %s", err)
 			switch err {
 			case data.ErrAccessDenial:
@@ -332,14 +324,14 @@ func RecordDELETE(ctx context.Context, w http.ResponseWriter, r *http.Request, l
 		return
 	}
 
-	user, ok := userFromContext(ctx)
+	u, ok := user.FromContext(ctx)
 	if !ok {
 		l.Print("RecordDELETE Error: failed to retrieve user from context")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	if allowed, err := access.CanDelete(db, user, m); err != nil {
+	if allowed, err := access.CanDelete(db, u, m); err != nil {
 		l.Printf("RecordDELETE Error: %s", err)
 		http.Error(w, "database error", http.StatusInternalServerError)
 		return
@@ -415,7 +407,7 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	user, ok := userFromContext(ctx)
+	u, ok := user.FromContext(ctx)
 	if !ok {
 		l.Print("RecordQueryPOST Error: failed to retrieve user from context")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -434,7 +426,7 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 	results := make([]data.Record, 0)
 	m := models.ModelFor(kind)
 	for iter.Next(m) {
-		if ok, err := access.CanRead(db, user, m); err != nil {
+		if ok, err := access.CanRead(db, u, m); err != nil {
 			l.Printf("RecordQueryPOST Error: while processing query, %s", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
@@ -482,12 +474,12 @@ func ContextualizeRecordChangesGET(ctx context.Context, db data.DB, logger servi
 		}
 
 		u, _ := cred.Owner(db)
-		RecordChangesGET(context.WithValue(ctx, userKey, u), ws, db, logger)
+		RecordChangesGET(user.NewContext(ctx, u), ws, db, logger)
 	}
 }
 
 func RecordChangesGET(ctx context.Context, ws *websocket.Conn, db data.DB, logger services.Logger) {
-	user, ok := userFromContext(ctx)
+	u, ok := user.FromContext(ctx)
 	if !ok {
 		logger.Print("RecordChangesGET Error: failed to retrieve user from context")
 		return
@@ -515,7 +507,7 @@ func RecordChangesGET(ctx context.Context, ws *websocket.Conn, db data.DB, logge
 	// Get the db's changes, then filter by updates, then
 	// filter by whether this user can read the record
 	changes := data.Filter(db.Changes(), func(c *data.Change) bool {
-		ok, _ := access.CanRead(db, user, c.Record)
+		ok, _ := access.CanRead(db, u, c.Record)
 		return ok
 	})
 
