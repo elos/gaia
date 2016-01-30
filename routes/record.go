@@ -17,63 +17,109 @@ import (
 	"golang.org/x/net/websocket"
 )
 
+// --- URL Parameter Names {{{
+
+// The URL params the /record/ routes expect
+const (
+	// kindParam is the parameter which specifies the record's kind
+	kindParam = "kind"
+	// idParam is the parameter which specifies the record's id
+	idParam = "id"
+)
+
+// --- }}}
+
+// --- Authenticate {{{
+
+// Authenticate checks a request's basic authentication, and associates a *models.User with the context
+// if so. Otherwise it handles responding to and closing the request.
+//
+//		contextWithUser, authWasSuccessful := routes.Authenticate(ctx, w, r, logger, db)
+//
+// Use for any requests which expect to act on behalf of a user (which is most)
 func Authenticate(ctx context.Context, w http.ResponseWriter, r *http.Request, l services.Logger, db services.DB) (context.Context, bool) {
+	var (
+		c   *models.Credential
+		u   *models.User
+		err error
+	)
+
 	public, private, ok := r.BasicAuth()
 	if !ok {
-		l.Print("Authentication failed: couldn't retrieve basic auth")
-		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-		return nil, false
+		// assume std lib didn't make a mistake, and the BasicAuth simply wasn't given
+		goto unauthorized
 	}
 
-	cred, err := access.Authenticate(db, public, private)
-	if err != nil {
-		l.Print("Authentication failed: couldn't find credential")
-		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-		return nil, false
+	if c, err = access.Authenticate(db, public, private); err != nil {
+		l.Printf("routes.Authenticate Error: authentication failed: couldn't find credential: %s", err)
+		goto unauthorized // this error is on us, but it manifests as a failure to authenticate
 	}
 
-	u, err := cred.Owner(db)
-	if err != nil {
-		l.Print("Authentication failed: couldn't load user's owner")
-		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-		return nil, false
+	if u, err = c.Owner(db); err != nil {
+		l.Printf("routes.Authenticate Error: authentication failed: couldn't load user's owner: %s", err)
+		goto unauthorized // this error is also on us, but also manifests as a failure to authenticate
 	}
 
+	// successful authentications
 	return user.NewContext(ctx, u), true
+
+	// rejection
+unauthorized:
+	http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+	return nil, false
 }
 
-const kindParam = "kind"
-const idParam = "id"
+// --- }}}
 
+// --- RecordGET {{{
+
+// RecordGET implements gaia's response to a GET request to the /record/ endpoint
+//
+// Assumes: The user has been authenticated
+//
+// Proceedings: First parses the url parameters, and retrieves the kind and id parameters; both of which are required
+//	Then it loads that record, checks if the user is allowed to access it, and then returns the model as JSON
+//
+// Success:
+//		StatusOK with the record as JSON
+//
+// Errors:
+//		* InternalServerError: failure to parse the parameters, database connections, json marshalling
+//		* BadRequest: no kind param, no id param, unrecognized kind, invalid id
+//		* NotFound: unauthorized, record actually doesn't exist
 func RecordGET(ctx context.Context, w http.ResponseWriter, r *http.Request, l services.Logger, db services.DB) {
+	// Parse the form value
 	if err := r.ParseForm(); err != nil {
 		l.Printf("RecordGET Error: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	k := r.Form[kindParam]
-	if len(k) == 0 {
+	// Secure the kind parameter's existence, and superficial validity (i.e., non-empty)
+	k := r.FormValue(kindParam)
+	if k == "" {
 		http.Error(w, "You must specifiy a kind", http.StatusBadRequest)
 		return
 	}
+	kind := data.Kind(k)
 
-	kind := data.Kind(k[0])
-
-	i := r.Form[idParam]
-	if len(i) == 0 {
+	// Secure the id parameter's existence, and superficial validity (i.e., non-empty)
+	i := r.FormValue(idParam)
+	if i == "" {
 		http.Error(w, "You must specify an id", http.StatusBadRequest)
 		return
 	}
 
-	id, err := db.ParseID(i[0])
-	if err != nil {
-		http.Error(w, fmt.Sprintf("The id '%s' is invalid", id), http.StatusBadRequest)
+	// Ensure the kind is recognized
+	if _, ok := models.Kinds[kind]; !ok {
+		http.Error(w, fmt.Sprintf("The kind '%s' is not recognized", kind), http.StatusBadRequest)
 		return
 	}
 
-	if _, ok := models.Kinds[kind]; !ok {
-		http.Error(w, fmt.Sprintf("The kind '%s' is not recognized", kind), http.StatusBadRequest)
+	// Ensure the id is valid
+	id, err := db.ParseID(i)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("The id '%s' is invalid", id), http.StatusBadRequest)
 		return
 	}
 
@@ -82,45 +128,56 @@ func RecordGET(ctx context.Context, w http.ResponseWriter, r *http.Request, l se
 
 	if err := db.PopulateByID(m); err != nil {
 		switch err {
+		// ErrAccessDenial and ErrNotFound are "normal" courses, in the sense that they
+		// may be expected in normal usage.
 		case data.ErrAccessDenial:
-			fallthrough // don't leak information
+			fallthrough // don't leak information, make it look like a 404
 		case data.ErrNotFound:
+			// This is, by fay, the most common case here.
 			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		// ErrNoConnection, ErrInvalidID and the undetermined errors are all non-normal cases
 		case data.ErrNoConnection:
 			fallthrough
 		case data.ErrInvalidID:
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			fallthrough
 		default:
 			l.Printf("RecordGET Error: %s", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
-		return
+		return // regardless of what the error was, we are bailing
 	}
 
+	// Retrieve the user this request was authenticated as
 	u, ok := user.FromContext(ctx)
-	if !ok {
+	if !ok { // This is certainly an issue, and should _never_ happen
 		l.Print("RecordGET Error: failed to retrieve user from context")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
+	// Now we impose the system access control, beyond the database access control
+	// TODO: limit the domain of errors CanRead returns
 	if allowed, err := access.CanRead(db, u, m); err != nil {
 		switch err {
+		// Again, though odd, both of these are arguably expected
 		case data.ErrAccessDenial:
 			fallthrough // don't leak information
 		case data.ErrNotFound:
 			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		// These are not-expected
 		case data.ErrNoConnection:
 			fallthrough
 		case data.ErrInvalidID:
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			fallthrough
 		default:
 			l.Printf("RecordGET Error: %s", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		}
 		return
 	} else if !allowed {
-		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		// If you can't read the record you are asking for,
+		// it does not exist (as far as you are concerned"
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
 
@@ -132,50 +189,86 @@ func RecordGET(ctx context.Context, w http.ResponseWriter, r *http.Request, l se
 	}
 
 	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(bytes)
 }
 
-// RecordPOST handles a 'POST' request to /records
+// --- }}}
+
+// --- RecordPOST {{{
+
+// RecordPOST implements gaia's response to a POST request to the /record/ endpoint
 //
-// It has logging and CORS middleware applied to it
+// Assumes: The user has been authenticated
+//
+// Proceedings: First parses the url parameters, and retrieves the kind parameter, which is required.
+//	Then it checks whether the record's id is declared, if not it generates one. And proceeds to
+//	save/update the record.
+//
+// Success:
+//		StatusOK with the record as JSON, meaning the record was _updated_
+//		StatusCreated with the record as JSON, meaning the record was _created_
+//
+// Errors:
+//		* InternalServerError: failure to parse the parameters, database connections, json marshalling
+//		* BadRequest: no kind param, unrecognized kind
+//		* NotFound: unauthorized, record actually doesn't exist
+//		* Unauthorized: not authorized to create/update that record, database access denial
 func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, l services.Logger, db services.DB) {
-	if err := r.ParseForm(); err != nil {
+	var err error
+
+	// Parse the form
+	if err = r.ParseForm(); err != nil {
 		l.Printf("RecordPOST Error: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	k := r.Form[kindParam]
-	if len(k) == 0 {
+	// Retrieve the kind parameter
+	k := r.FormValue(kindParam)
+	if k == "" {
 		http.Error(w, "You must specifiy a kind", http.StatusBadRequest)
 		return
 	}
+	kind := data.Kind(k)
 
-	kind := data.Kind(k[0])
-
+	// Verify it is a recognized kind
 	if _, ok := models.Kinds[kind]; !ok {
 		http.Error(w, fmt.Sprintf("The kind '%s' is not recognized", kind), http.StatusBadRequest)
 		return
 	}
 
-	defer r.Body.Close()
 	m := models.ModelFor(kind)
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		l.Printf("RecordPOST Error: while reading request body, %s", err)
+
+	var requestBody []byte
+
+	// Now we must read the body of the request
+	defer r.Body.Close() // don't forget to close it
+	if requestBody, err = ioutil.ReadAll(r.Body); err != nil {
+		l.Printf("RecordPOST Error: while reading request body: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	l.Print("Request Body:\n%s", string(body))
-
-	if err = json.Unmarshal(body, m); err != nil {
-		l.Printf("RecordPOST Info: request body:\n%s", string(body))
+	// Now we unmarshal that into the record
+	if err = json.Unmarshal(requestBody, m); err != nil {
+		l.Printf("RecordPOST Info: request body:\n%s", string(requestBody))
 		l.Printf("RecordPOST Error: while unmarshalling request body, %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
+	// Now we can determine whether we are creating a new record
+	// or updating an existing one. We expect to be updating...
+	creation := false
+
+	// Unless the id is empty, in which case we are creating
+	if m.ID().String() == "" {
+		m.SetID(db.NewID()) // Be sure to assign it an ID
+		creation = true
+	}
+
+	// Retrieve our user
 	u, ok := user.FromContext(ctx)
 	if !ok {
 		l.Print("RecordPOST Error: failed to retrieve user from context")
@@ -183,69 +276,49 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, l s
 		return
 	}
 
-	creation := false
+	var allowed bool
 
-	if m.ID().String() == "" {
-		m.SetID(db.NewID())
-		creation = true
-	}
-
+	// We need to check either [creation] we can create the record or [!creation]
+	// we can update the record we are trying to update
 	if creation {
-		if allowed, err := access.CanCreate(db, u, m); err != nil {
-			l.Print("CanCreate Error: %s", err)
-			switch err {
-			case data.ErrAccessDenial:
-				fallthrough // don't leak information
-			case data.ErrNotFound:
-				http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-			case data.ErrNoConnection:
-				fallthrough
-			case data.ErrInvalidID:
-				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			default:
-				l.Printf("RecordPOST Error: %s", err)
-				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			}
-			return
-		} else if !allowed {
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-			return
-		}
+		allowed, err = access.CanCreate(db, u, m)
 	} else {
-		if allowed, err := access.CanWrite(db, u, m); err != nil {
-			l.Print("CanWrite Error: %s", err)
-			switch err {
-			case data.ErrAccessDenial:
-				fallthrough // don't leak information
-			case data.ErrNotFound:
-				http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-			case data.ErrNoConnection:
-				fallthrough
-			case data.ErrInvalidID:
-				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			default:
-				l.Printf("RecordPOST Error: %s", err)
-				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			}
-			return
-		} else if !allowed {
-			l.Print("write access denied")
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-			return
-		}
+		allowed, err = access.CanWrite(db, u, m)
 	}
 
-	if err := db.Save(m); err != nil {
-		l.Print("Save Error: %s", err)
+	if err != nil {
 		switch err {
+		// This indicates that no, you have no access
 		case data.ErrAccessDenial:
-			fallthrough // don't leak information
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		// All of these are bad, and considered an internal error
 		case data.ErrNotFound:
-			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+			fallthrough
 		case data.ErrNoConnection:
 			fallthrough
 		case data.ErrInvalidID:
+			fallthrough
+		default:
+			l.Printf("RecordPOST Error: %s", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
+		return
+	} else if !allowed {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	// If we have made it this far, it only remains to commit the record
+	if err = db.Save(m); err != nil {
+		switch err {
+		case data.ErrAccessDenial:
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		// These are all equally distressing
+		case data.ErrNotFound: // TODO shouldn't a not found not be fing possible for a Save?
+			fallthrough
+		case data.ErrNoConnection:
+			fallthrough
+		case data.ErrInvalidID:
 		default:
 			l.Printf("RecordPOST Error: %s", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -253,6 +326,7 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, l s
 		return
 	}
 
+	// Now we shall write our response
 	bytes, err := json.MarshalIndent(m, "", "    ")
 	if err != nil {
 		l.Printf("RecordPOST Error: %s", err)
@@ -266,57 +340,80 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, l s
 		w.WriteHeader(http.StatusOK)
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(bytes)
 }
 
-// RecordDELETE handles a 'DELETE' request to /records
+// --- }}}
+
+// --- RecordDELETE {{{
+
+// RecordDelete implements gaia's response to a DELETE request to the /record/ endpoint
 //
-// It has logging and CORS middleware applied to it.
+// Assumes: The user has been authenticated
+//
+// Proceedings: First parses the url parameters, and retrieves the kind and id parameters,
+//	which are required. Then it checks for authorization to delete, and proceeds with the
+//	action if so.
+//
+// Success:
+//		StatusNoContent indicating a succesful deletion
+//
+// Errors:
+//		* InternalServerError: failure to parse the parameters, database connections, json marshalling
+//		* BadRequest: no kind param, unrecognized kind, no id param, invalid id param
+//		* NotFound: unauthorized, record actually doesn't exist
+//		* Unauthorized: not authorized to delete that record, database access denial
 func RecordDELETE(ctx context.Context, w http.ResponseWriter, r *http.Request, l services.Logger, db services.DB) {
+	// Parse the form
 	if err := r.ParseForm(); err != nil {
 		l.Printf("RecordDELETE Error: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	k := r.Form[kindParam]
-	if len(k) == 0 {
+	// Retrieve the kind parameter
+	k := r.FormValue(kindParam)
+	if k == "" {
 		http.Error(w, "You must specifiy a kind", http.StatusBadRequest)
 		return
 	}
+	kind := data.Kind(k)
 
-	kind := data.Kind(k[0])
-
-	i := r.Form[idParam]
-	if len(i) == 0 {
+	// Retrieve the id parameter
+	i := r.FormValue(idParam)
+	if i == "" {
 		http.Error(w, "You must specify an id", http.StatusBadRequest)
 		return
 	}
 
-	id, err := db.ParseID(i[0])
-	if err != nil {
-		http.Error(w, fmt.Sprintf("The id '%s' is invalid", id), http.StatusBadRequest)
-		return
-	}
-
+	// Verify the kind is recognized
 	_, ok := models.Kinds[kind]
 	if !ok {
 		http.Error(w, fmt.Sprintf("The kind '%s' is not recognized", kind), http.StatusBadRequest)
 		return
 	}
 
+	// Verify the id is valid
+	id, err := db.ParseID(i)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("The id '%s' is invalid", id), http.StatusBadRequest)
+		return
+	}
+
+	// Get the record, so that we can decide whether we have permission to delete it
 	m := models.ModelFor(kind)
 	m.SetID(id)
-	if err := db.PopulateByID(m); err != nil {
+	if err = db.PopulateByID(m); err != nil {
 		switch err {
 		case data.ErrAccessDenial:
-			fallthrough // don't leak information
+			fallthrough // don't leak information (were we denied access, this record doesn't exist)
 		case data.ErrNotFound:
 			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		case data.ErrNoConnection:
 			fallthrough
 		case data.ErrInvalidID:
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			fallthrough
 		default:
 			l.Printf("RecordDELETE Error: %s", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -324,6 +421,7 @@ func RecordDELETE(ctx context.Context, w http.ResponseWriter, r *http.Request, l
 		return
 	}
 
+	// Retrieve the user we are authenticated as
 	u, ok := user.FromContext(ctx)
 	if !ok {
 		l.Print("RecordDELETE Error: failed to retrieve user from context")
@@ -331,6 +429,7 @@ func RecordDELETE(ctx context.Context, w http.ResponseWriter, r *http.Request, l
 		return
 	}
 
+	// check for authorization
 	if allowed, err := access.CanDelete(db, u, m); err != nil {
 		l.Printf("RecordDELETE Error: %s", err)
 		http.Error(w, "database error", http.StatusInternalServerError)
@@ -344,9 +443,12 @@ func RecordDELETE(ctx context.Context, w http.ResponseWriter, r *http.Request, l
 	if err := db.Delete(m); err != nil {
 		switch err {
 		case data.ErrAccessDenial:
-			fallthrough // don't leak information
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound) // don't leak information
 		case data.ErrNotFound:
-			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+			// this shouldn't happen unless it was deleted by another process
+			// in between when we populated the record by id, in which case it was successful
+			goto successfulDelete
+			// all of these errors, we can't guarantee deletion
 		case data.ErrNoConnection:
 			fallthrough
 		case data.ErrInvalidID:
@@ -358,55 +460,87 @@ func RecordDELETE(ctx context.Context, w http.ResponseWriter, r *http.Request, l
 		return
 	}
 
+successfulDelete:
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// RecordOPTIONS handles an 'OPTIONS' request to /records
+// --- }}}
+
+// --- RecordOPTIONS {{{
+
+// RecordOPTIONS implements gaia's response to a OPTIONS request to the /record/ endpoint
 //
-// It has logging and CORS middleware applied to it.
+// Assumes: The user has been authenticated
+//
+// Proceedings: Write a success, the CORS header should already have been applied by middleware
+//
+// Success:
+//		StatusOK
 func RecordOPTIONS(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	// The CORS header has already been applied by our middleware,
-	// therefore we just need to indicate a successful response.
+	// therefore we need only indicate a successful response.
 	w.WriteHeader(http.StatusOK)
 }
 
+// --- }}}
+
+// --- RecordQueryPOST {{{
+
+// RecordQueryPOST implements gaia's response to a POST request to the /record/query/ endpoint
+//
+// Assumes: The user has been authenticated
+//
+// Proceedings:
+//
+// Success:
+//		StatusOK
+//
+// Error:
+//		* InternalServerError: parsing url params,
+//		* BadRequest: no kind parameter, unrecognized kind
 func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, l services.Logger, db data.DB) {
-	if err := r.ParseForm(); err != nil {
+	var err error
+
+	// Parse the form
+	if err = r.ParseForm(); err != nil {
 		l.Printf("RecordQueryPOST Error: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	k := r.Form[kindParam]
-	if len(k) == 0 {
+	// Retrieve the kind parameter
+	k := r.FormValue(kindParam)
+	if k == "" {
 		http.Error(w, "You must specifiy a kind", http.StatusBadRequest)
 		return
 	}
+	kind := data.Kind(k)
 
-	kind := data.Kind(k[0])
-
+	// Verify the kind is recognized
 	if _, ok := models.Kinds[kind]; !ok {
 		http.Error(w, fmt.Sprintf("The kind '%s' is not recognized", kind), http.StatusBadRequest)
 		return
 	}
 
+	var requestBody []byte
+
 	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		l.Printf("RecordQueryPOST Error: while reading request body, %s", err)
+	if requestBody, err = ioutil.ReadAll(r.Body); err != nil {
+		l.Printf("RecordQueryPOST Error: while reading request body: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
+	// These are the selectors, unmarshal the request body into them
 	attrs := make(data.AttrMap)
-
-	if err = json.Unmarshal(body, &attrs); err != nil {
-		l.Printf("RecordQueryPOST Info: request body:\n%s", string(body))
+	if err = json.Unmarshal(requestBody, &attrs); err != nil {
+		l.Printf("RecordQueryPOST Info: request body:\n%s", string(requestBody))
 		l.Printf("RecordQueryPOST Error: while unmarshalling request body, %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
+	// Retrieve the user we are acting on behalf
 	u, ok := user.FromContext(ctx)
 	if !ok {
 		l.Print("RecordQueryPOST Error: failed to retrieve user from context")
@@ -414,19 +548,20 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	q := db.Query(kind)
-	q.Select(attrs)
-	iter, err := q.Execute()
-	if err != nil {
+	// Load our actual query
+	var iter data.Iterator
+	if iter, err = db.Query(kind).Select(attrs).Execute(); err != nil {
 		l.Printf("RecordQueryPOST Error: while executing query, %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
+	// Iterator through the results and write the response
 	results := make([]data.Record, 0)
 	m := models.ModelFor(kind)
 	for iter.Next(m) {
 		if ok, err := access.CanRead(db, u, m); err != nil {
+			// We've hit an error and need to bail
 			l.Printf("RecordQueryPOST Error: while processing query, %s", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
@@ -442,7 +577,7 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	returnBody, err := json.Marshal(results)
+	returnBody, err := json.MarshalIndent(results, "", "    ")
 	if err != nil {
 		l.Printf("RecordQueryPOST Error: while loading query, %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -450,8 +585,11 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 	}
 
 	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(returnBody)
 }
+
+// --- }}}
 
 func ContextualizeRecordChangesGET(ctx context.Context, db data.DB, logger services.Logger) websocket.Handler {
 	return func(ws *websocket.Conn) {

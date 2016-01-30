@@ -9,6 +9,8 @@ import (
 	"golang.org/x/net/websocket"
 )
 
+// TODO: re-add CORS to all of these
+
 // basic logging
 func logRequest(handle http.HandlerFunc, logger services.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
