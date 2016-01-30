@@ -288,6 +288,142 @@ func TestRecordQuery(t *testing.T) {
 	}
 }
 
+func TestRecordQueryLimit(t *testing.T) {
+	db, _, s := testInstance(t, context.Background())
+	defer s.Close()
+
+	user, cred := testUser(t, db)
+
+	task1 := models.NewTask()
+	task1.SetID(db.NewID())
+	task1.CreatedAt = time.Now()
+	task1.OwnerId = user.Id
+	task1.Name = "task1"
+	task1.UpdatedAt = time.Now()
+	if err := db.Save(task1); err != nil {
+		t.Fatal(err)
+	}
+
+	task2 := models.NewTask()
+	task2.SetID(db.NewID())
+	task2.CreatedAt = time.Now()
+	task2.OwnerId = user.Id
+	task2.Name = "task2"
+	task2.UpdatedAt = time.Now()
+	if err := db.Save(task2); err != nil {
+		t.Fatal(err)
+	}
+
+	params := url.Values{}
+	params.Set("kind", models.TaskKind.String())
+	params.Set("limit", "1")
+	url := s.URL + "/record/query/?" + params.Encode()
+	t.Logf("Constructed URL: %s", url)
+
+	req, err := http.NewRequest("POST", url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.SetBasicAuth(cred.Public, cred.Private)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Logf("Code: %d", resp.StatusCode)
+	t.Logf("Body:\n%s", body)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Expected status code of %d", http.StatusOK)
+	}
+
+	// Should contain one or the other, but not both
+	if strings.Contains(string(body), "task1") {
+		if strings.Contains(string(body), "task2") {
+			t.Fatal("Response body should have contained task2")
+		}
+	} else {
+		if !strings.Contains(string(body), "task2") {
+			t.Fatal("Response body should have contained task2")
+		}
+	}
+}
+
+func TestRecordQuerySkip(t *testing.T) {
+	db, _, s := testInstance(t, context.Background())
+	defer s.Close()
+
+	user, cred := testUser(t, db)
+
+	task1 := models.NewTask()
+	task1.SetID(db.NewID())
+	task1.CreatedAt = time.Now()
+	task1.OwnerId = user.Id
+	task1.Name = "task1"
+	task1.UpdatedAt = time.Now()
+	if err := db.Save(task1); err != nil {
+		t.Fatal(err)
+	}
+
+	task2 := models.NewTask()
+	task2.SetID(db.NewID())
+	task2.CreatedAt = time.Now()
+	task2.OwnerId = user.Id
+	task2.Name = "task2"
+	task2.UpdatedAt = time.Now()
+	if err := db.Save(task2); err != nil {
+		t.Fatal(err)
+	}
+
+	params := url.Values{}
+	params.Set("kind", models.TaskKind.String())
+	params.Set("skip", "1")
+	url := s.URL + "/record/query/?" + params.Encode()
+	t.Logf("Constructed URL: %s", url)
+
+	req, err := http.NewRequest("POST", url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.SetBasicAuth(cred.Public, cred.Private)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Logf("Code: %d", resp.StatusCode)
+	t.Logf("Body:\n%s", body)
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Expected status code of %d", http.StatusOK)
+	}
+
+	// Should contain one or the other, but not both
+	if strings.Contains(string(body), "task1") {
+		if strings.Contains(string(body), "task2") {
+			t.Fatal("Response body should have contained task2")
+		}
+	} else {
+		if !strings.Contains(string(body), "task2") {
+			t.Fatal("Response body should have contained task2")
+		}
+	}
+}
+
 type taskChange struct {
 	Record models.Task
 	data.ChangeKind
