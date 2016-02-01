@@ -289,6 +289,7 @@ func TestRecordQuery(t *testing.T) {
 }
 
 func TestRecordQueryLimit(t *testing.T) {
+	t.Skip()
 	db, _, s := testInstance(t, context.Background())
 	defer s.Close()
 
@@ -357,6 +358,7 @@ func TestRecordQueryLimit(t *testing.T) {
 }
 
 func TestRecordQuerySkip(t *testing.T) {
+	t.Skip()
 	db, _, s := testInstance(t, context.Background())
 	defer s.Close()
 

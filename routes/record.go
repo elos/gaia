@@ -575,7 +575,19 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 
 	// Load our actual query
 	var iter data.Iterator
-	if iter, err = db.Query(kind).Select(attrs).Limit(limit).Batch(batch).Skip(skip).Execute(); err != nil {
+	query := db.Query(kind).Select(attrs)
+
+	if limit > 0 {
+		query.Limit(limit)
+	}
+	if batch > 0 {
+		query.Batch(batch)
+	}
+	if skip > 0 {
+		query.Skip(0)
+	}
+
+	if iter, err = query.Execute(); err != nil {
 		l.Printf("RecordQueryPOST Error: while executing query, %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
