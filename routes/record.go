@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"strconv"
 
 	"github.com/elos/data"
 	"github.com/elos/gaia/services"
@@ -528,20 +527,22 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Retrieve the limit, batch and skip parameters
-	lim := r.FormValue(limitParam)
-	bat := r.FormValue(batchParam)
-	ski := r.FormValue(skipParam)
+	/*
+		// Retrieve the limit, batch and skip parameters
+		lim := r.FormValue(limitParam)
+		bat := r.FormValue(batchParam)
+		ski := r.FormValue(skipParam)
 
-	// Set up the variables to apply to the query
-	var limit, batch, skip int
-	if lim != "" {
-		limit, _ = strconv.Atoi(lim)
-	} else if bat != "" {
-		batch, _ = strconv.Atoi(bat)
-	} else if ski != "" {
-		skip, _ = strconv.Atoi(ski)
-	}
+		// Set up the variables to apply to the query
+		var limit, batch, skip int
+		if lim != "" {
+			limit, _ = strconv.Atoi(lim)
+		} else if bat != "" {
+			batch, _ = strconv.Atoi(bat)
+		} else if ski != "" {
+			skip, _ = strconv.Atoi(ski)
+		}
+	*/
 
 	// Read the selection attrs from the body
 	var requestBody []byte
@@ -576,16 +577,6 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 	// Load our actual query
 	var iter data.Iterator
 	query := db.Query(kind).Select(attrs)
-
-	if limit > 0 {
-		query.Limit(limit)
-	}
-	if batch > 0 {
-		query.Batch(batch)
-	}
-	if skip > 0 {
-		query.Skip(0)
-	}
 
 	if iter, err = query.Execute(); err != nil {
 		l.Printf("RecordQueryPOST Error: while executing query, %s", err)
