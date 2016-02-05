@@ -95,5 +95,21 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 		routes.ContextualizeCommandWebGET(requestBackground, s.DB, s.Logger),
 	).ServeHTTP, s.Logger))
 
+	// /mobile/location/
+	mux.HandleFunc(routes.MobileLocation, logRequest(func(w http.ResponseWriter, r *http.Request) {
+		ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
+		if !ok {
+			return
+		}
+
+		switch r.Method {
+		case "POST":
+			routes.MobileLocationPOST(ctx, w, r, s.Logger, s.DB)
+		default:
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+	}, s.Logger))
+
 	return mux, cancelAll
 }
