@@ -8,5 +8,5 @@ const (
 	CommandSMS     = "/command/sms/"
 	CommandWeb     = "/command/web/"
 	CommandiOS     = "/command/ios/"
-	MobileLocation = "/mobile/location"
+	MobileLocation = "/mobile/location/"
 )
