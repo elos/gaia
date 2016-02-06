@@ -52,6 +52,7 @@ func Authenticate(ctx context.Context, w http.ResponseWriter, r *http.Request, l
 
 	public, private, ok := r.BasicAuth()
 	if !ok {
+		l.Printf("routes.Authenticate Error: authentication failed: couldn't retrieve basic auth")
 		// assume std lib didn't make a mistake, and the BasicAuth simply wasn't given
 		goto unauthorized
 	}
