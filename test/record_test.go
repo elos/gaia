@@ -22,6 +22,8 @@ import (
 	"golang.org/x/net/websocket"
 )
 
+// --- Test Helpers (testInstance, testUser) {{{
+
 func testInstance(t *testing.T, ctx context.Context) (data.DB, *gaia.Gaia, *httptest.Server) {
 	db := mem.NewDB()
 
@@ -49,6 +51,10 @@ func testUser(t *testing.T, db data.DB) (*models.User, *models.Credential) {
 
 	return u, c
 }
+
+// --- }}}
+
+// --- Test `GET /record/` {{{
 
 func TestRecordGet(t *testing.T) {
 	db, _, s := testInstance(t, context.Background())
@@ -101,6 +107,10 @@ func TestRecordGet(t *testing.T) {
 		t.Fatal("Response body should have contained the task name")
 	}
 }
+
+// --- }}}
+
+// --- Test `POST /record/` {{{
 
 func TestRecordPost(t *testing.T) {
 	db, _, s := testInstance(t, context.Background())
@@ -172,6 +182,10 @@ func TestRecordPost(t *testing.T) {
 	}
 }
 
+// --- }}}
+
+// --- Test `DELETE /record/` {{{
+
 func TestRecordDELETE(t *testing.T) {
 	db, _, s := testInstance(t, context.Background())
 	defer s.Close()
@@ -227,6 +241,10 @@ func TestRecordDELETE(t *testing.T) {
 		t.Fatal("The task should not be able to be found")
 	}
 }
+
+// --- }}}
+
+// --- Test `POST /record/query/` {{{
 
 func TestRecordQuery(t *testing.T) {
 	db, _, s := testInstance(t, context.Background())
@@ -424,9 +442,11 @@ func TestRecordQuerySkip(t *testing.T) {
 	}
 }
 
+// --- }}}
+
 type taskChange struct {
-	Record models.Task
-	data.ChangeKind
+	Record          models.Task `json:"record"`
+	data.ChangeKind `json:"kind"`
 }
 
 func TestRecordChanges(t *testing.T) {

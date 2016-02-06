@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -664,7 +663,7 @@ func RecordChangesGET(ctx context.Context, ws *websocket.Conn, db data.DB, logge
 	audit := db.Changes()
 	go func() {
 		for c := range *audit {
-			log.Printf("[AUDIT]: \n %+v", c)
+			logger.Printf("[AUDIT]: \n %+v", c)
 		}
 	}()
 
@@ -683,7 +682,7 @@ func RecordChangesGET(ctx context.Context, ws *websocket.Conn, db data.DB, logge
 	for {
 		select {
 		case change, ok := <-*changes:
-			log.Printf("Recieved Change: %+v", change)
+			logger.Printf("Recieved Change: %+v", change)
 			// channels was closed
 			if !ok {
 				return

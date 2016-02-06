@@ -14,7 +14,7 @@ import (
 // basic logging
 func logRequest(handle http.HandlerFunc, logger services.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		logger.Printf("%s %s [%+v]", r.Method, r.URL, r.Header)
+		logger.Printf("%s %s", r.Method, r.URL)
 		handle(w, r)
 	}
 }
