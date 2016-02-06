@@ -346,12 +346,6 @@ func (q *query) Select(attrs data.AttrMap) data.Query {
 	return q
 }
 
-type eventChange struct {
-	Record models.Event
-	data.ChangeKind
-}
-
-// TODO: (make this not only events)
 func (db *DB) Changes() *chan *data.Change {
 	ch := make(chan *data.Change)
 
@@ -360,7 +354,6 @@ func (db *DB) Changes() *chan *data.Change {
 		wsURL := db.recordChangesURL(url.Values{
 			"public":  []string{db.Username},
 			"private": []string{db.Password},
-			"kind":    []string{models.EventKind.String()},
 		})
 
 		ws, err := websocket.Dial(wsURL, "", db.URL)
@@ -371,15 +364,15 @@ func (db *DB) Changes() *chan *data.Change {
 		}
 		defer ws.Close()
 
-		var ec eventChange
+		var change data.Change
 		for {
-			if err := websocket.JSON.Receive(ws, &ec); err != nil {
+			if err := websocket.JSON.Receive(ws, &change); err != nil {
 				log.Print("FAILED TO RECIEVE FROM GAIA")
 				close(ch)
 				return
 			}
 
-			ch <- data.NewChange(ec.ChangeKind, &ec.Record)
+			ch <- &change
 		}
 	}()
 

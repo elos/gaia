@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/elos/data"
 	"github.com/elos/gaia/services"
@@ -695,6 +696,8 @@ func RecordChangesGET(ctx context.Context, ws *websocket.Conn, db data.DB, logge
 
 				return
 			}
+		case time.After(5 * time.Second):
+			logger.Printf("No change in 5 seconds, but still listening")
 		case <-ctx.Done():
 			// context was cancelled
 			return
