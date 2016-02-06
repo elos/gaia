@@ -13,6 +13,7 @@ import (
 
 	"github.com/elos/data"
 	"github.com/elos/data/builtin/mem"
+	"github.com/elos/data/transfer"
 	"github.com/elos/gaia"
 	"github.com/elos/gaia/routes"
 	"github.com/elos/gaia/services"
@@ -444,11 +445,6 @@ func TestRecordQuerySkip(t *testing.T) {
 
 // --- }}}
 
-type taskChange struct {
-	Record          models.Task `json:"record"`
-	data.ChangeKind `json:"kind"`
-}
-
 func TestRecordChanges(t *testing.T) {
 	ctx, cancelAllConnections := context.WithCancel(context.Background())
 	defer cancelAllConnections()
@@ -492,10 +488,12 @@ func TestRecordChanges(t *testing.T) {
 	}
 	t.Log("Task created")
 
-	var tc taskChange
-	if err := websocket.JSON.Receive(ws, &tc); err != nil {
+	var ct transfer.ChangeTransport
+	if err := websocket.JSON.Receive(ws, &ct); err != nil {
 		t.Fatal(err)
 	}
+
+	tc := transfer.ChangeFrom(&ct, models.ModelFor(ct.RecordKind))
 
 	t.Logf("Task Change Recieved: %++v", tc)
 
@@ -507,7 +505,7 @@ func TestRecordChanges(t *testing.T) {
 		t.Fatal("Expected ChangeKind to be Update")
 	}
 
-	if tc.Record.Name != taskName {
+	if tc.Record.(*models.Task).Name != taskName {
 		t.Fatalf("Expected task name to be: '%s'", taskName)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/elos/data"
+	"github.com/elos/data/transfer"
 	"github.com/elos/gaia/services"
 	"github.com/elos/models"
 	"github.com/elos/models/access"
@@ -684,12 +685,15 @@ func RecordChangesGET(ctx context.Context, ws *websocket.Conn, db data.DB, logge
 		select {
 		case change, ok := <-*changes:
 			logger.Printf("Recieved Change: %+v", change)
-			// channels was closed
+			// channel was closed
 			if !ok {
+				logger.Printf("Change channel was closed")
 				return
 			}
 
-			if err := websocket.JSON.Send(ws, change); err != nil {
+			changeTransport := transfer.Change(change)
+
+			if err := websocket.JSON.Send(ws, changeTransport); err != nil {
 				if err != io.EOF {
 					logger.Printf("Error reading from socket: %s", err)
 				}

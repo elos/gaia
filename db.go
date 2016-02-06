@@ -19,6 +19,12 @@ import (
 	"golang.org/x/net/websocket"
 )
 
+type ChangeTransport struct {
+	ChangeKind data.ChangeKind        `json:"change_kind"`
+	RecordKind data.Kind              `json:"record_kind"`
+	Record     map[string]interface{} `json:"record"`
+}
+
 func recordEndpoint(host string) string {
 	return host + routes.Record
 }
@@ -364,15 +370,18 @@ func (db *DB) Changes() *chan *data.Change {
 		}
 		defer ws.Close()
 
-		var change data.Change
+		var change transfer.ChangeTransport
 		for {
 			if err := websocket.JSON.Receive(ws, &change); err != nil {
-				log.Print("FAILED TO RECIEVE FROM GAIA")
+				log.Printf("gaia.DB.Changes Error: %s", err)
 				close(ch)
 				return
 			}
 
-			ch <- &change
+			m := models.ModelFor(change.RecordKind)
+			transfer.TransferAttrs(change.Record, m)
+
+			ch <- data.NewChange(change.ChangeKind, m)
 		}
 	}()
 
