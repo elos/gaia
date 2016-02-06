@@ -373,7 +373,10 @@ func (db *DB) Changes() *chan *data.Change {
 		var change transfer.ChangeTransport
 		for {
 			if err := websocket.JSON.Receive(ws, &change); err != nil {
-				log.Printf("gaia.DB.Changes Error: %s", err)
+				if err == io.EOF {
+					close(ch)
+					return
+				}
 				close(ch)
 				return
 			}
