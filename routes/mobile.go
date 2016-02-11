@@ -58,7 +58,7 @@ func MobileLocationPOST(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		http.Error(w, "You must specify an longitude", http.StatusBadRequest)
 		return
 	}
-	longitude, err := strconv.ParseFloat(alt, 64)
+	longitude, err := strconv.ParseFloat(lon, 64)
 	if err != nil {
 		http.Error(w, "Parsing longitude", http.StatusBadRequest)
 		return

@@ -258,8 +258,6 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, l s
 		return
 	}
 
-	l.Printf("Request Body:\n%+s", requestBody)
-
 	// Now we unmarshal that into the record
 	if err = json.Unmarshal(requestBody, m); err != nil {
 		l.Printf("RecordPOST Info: request body:\n%s", string(requestBody))
