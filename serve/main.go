@@ -10,8 +10,10 @@ import (
 	"github.com/elos/data"
 	"github.com/elos/data/builtin/mem"
 	"github.com/elos/gaia"
+	"github.com/elos/gaia/agents"
 	"github.com/elos/gaia/services"
 	"github.com/elos/models"
+	"github.com/elos/models/user"
 	"github.com/subosito/twilio"
 	"golang.org/x/net/context"
 )
@@ -77,9 +79,16 @@ func main() {
 	)
 	log.Printf("== Initiliazed Gaia Core ==")
 
+	log.Printf("== Starting Agents ===")
+	user.Map(db, func(db data.DB, u *models.User) error {
+		go agents.LocationAgent(background, db, u)
+		return nil
+	})
+	log.Printf("== Started Agents ===")
+
 	log.Printf("== Starting HTTP Server ==")
 	host := fmt.Sprintf("%s:%d", *addr, *port)
-	log.Printf("\nServing on %s", host)
+	log.Printf("\tServing on %s", host)
 	if err = http.ListenAndServe(host, g); err != nil {
 		log.Fatal(err)
 	}
