@@ -30,6 +30,7 @@ func main() {
 		port   = flag.Int("port", 80, "port to listen on")
 		dbtype = flag.String("dbtype", "mongo", "type of database to use: (mem or mongo)")
 		dbaddr = flag.String("dbaddr", "0.0.0.0", "address of database")
+		appdir = flag.String("appdir", "app", "directory of maia build")
 		db     data.DB
 		err    error
 	)
@@ -72,6 +73,7 @@ func main() {
 		context.Background(),
 		new(gaia.Middleware),
 		&gaia.Services{
+			AppFileSystem:      http.Dir(*appdir),
 			SMSCommandSessions: smsMux,
 			DB:                 db,
 			Logger:             services.NewLogger(os.Stderr),

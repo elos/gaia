@@ -9,4 +9,7 @@ const (
 	CommandWeb     = "/command/web/"
 	CommandiOS     = "/command/ios/"
 	MobileLocation = "/mobile/location/"
+
+	App   = "/app/"
+	Index = "/"
 )

@@ -37,6 +37,8 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 	mux := http.NewServeMux()
 	requestBackground, cancelAll := context.WithCancel(ctx)
 
+	mux.Handle("/app/", http.StripPrefix("/app/", http.FileServer(s.AppFileSystem)))
+
 	// /register/
 	mux.HandleFunc(routes.Register, logRequest(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

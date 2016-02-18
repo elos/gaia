@@ -16,6 +16,7 @@ type Services struct {
 	services.Logger
 	services.SMSCommandSessions
 	services.WebCommandSessions
+	services.AppFileSystem
 }
 
 type Gaia struct {
