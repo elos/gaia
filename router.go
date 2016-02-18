@@ -10,11 +10,23 @@ import (
 )
 
 // TODO: re-add CORS to all of these
+const (
+	AllowOriginHeader      = "Access-Control-Allow-Origin"
+	AllowCredentialsHeader = "Access-Control-Allow-Credentials"
+)
 
 // basic logging
 func logRequest(handle http.HandlerFunc, logger services.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		logger.Printf("%s %s", r.Method, r.URL)
+		handle(w, r)
+	}
+}
+
+func cors(handle http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add(AllowOriginHeader, r.Header.Get("Origin"))
+		w.Header().Add(AllowCredentialsHeader, "true")
 		handle(w, r)
 	}
 }
@@ -35,7 +47,7 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 	}, s.Logger))
 
 	// /record/
-	mux.HandleFunc(routes.Record, logRequest(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc(routes.Record, logRequest(cors(func(w http.ResponseWriter, r *http.Request) {
 		ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
 		if !ok {
 			return
@@ -54,10 +66,10 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
 		}
-	}, s.Logger))
+	}), s.Logger))
 
 	// /record/query/
-	mux.HandleFunc(routes.RecordQuery, logRequest(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc(routes.RecordQuery, logRequest(cors(func(w http.ResponseWriter, r *http.Request) {
 		ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
 		if !ok {
 			return
@@ -70,7 +82,7 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
 		}
-	}, s.Logger))
+	}), s.Logger))
 
 	// /record/changes/
 	mux.HandleFunc(routes.RecordChanges, logRequest(websocket.Handler(
