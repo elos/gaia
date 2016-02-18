@@ -48,6 +48,11 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 
 	// /record/
 	mux.HandleFunc(routes.Record, logRequest(cors(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			routes.RecordOPTIONS(requestBackground, w, r)
+			return
+		}
+
 		ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
 		if !ok {
 			return
@@ -70,6 +75,11 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 
 	// /record/query/
 	mux.HandleFunc(routes.RecordQuery, logRequest(cors(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "OPTIONS" {
+			routes.RecordOPTIONS(requestBackground, w, r)
+			return
+		}
+
 		ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
 		if !ok {
 			return
