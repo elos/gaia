@@ -13,6 +13,7 @@ import (
 const (
 	AllowOriginHeader      = "Access-Control-Allow-Origin"
 	AllowCredentialsHeader = "Access-Control-Allow-Credentials"
+	AllowMethodsHeader     = "Access-Control-Allow-Methods"
 	AllowHeadersHeader     = "Access-Control-Allow-Headers"
 )
 
@@ -28,6 +29,10 @@ func cors(handle http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add(AllowOriginHeader, r.Header.Get("Origin"))
 		w.Header().Add(AllowCredentialsHeader, "true")
+		w.Header().Add(AllowMethodsHeader, "POST")
+		w.Header().Add(AllowMethodsHeader, "DELETE")
+		w.Header().Add(AllowMethodsHeader, "GET")
+		w.Header().Add(AllowMethodsHeader, "OPTIONS")
 		w.Header().Add(AllowHeadersHeader, "Authorization")
 		handle(w, r)
 	}
