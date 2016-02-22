@@ -298,7 +298,6 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, l s
 		switch err {
 		// This indicates that no, you have no access
 		case data.ErrAccessDenial:
-			l.Printf("RecordPOST Unauthorized: at permission to write/create stage")
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		// All of these are bad, and considered an internal error
 		case data.ErrNotFound:
@@ -313,6 +312,7 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, l s
 		}
 		return
 	} else if !allowed {
+		l.Printf("RecordPOST Unauthorized: at permission to write/create stage")
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
 	}
