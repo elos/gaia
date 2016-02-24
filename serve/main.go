@@ -84,6 +84,7 @@ func main() {
 	log.Printf("== Starting Agents ===")
 	user.Map(db, func(db data.DB, u *models.User) error {
 		go agents.LocationAgent(background, db, u)
+		go agents.TaskAgent(background, db, u)
 		return nil
 	})
 	log.Printf("== Started Agents ===")
