@@ -20,6 +20,8 @@ func TestTaskAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	changes := data.FilterKind(db.Changes(), models.TaskKind)
 	tsk := models.NewTask()
 	tsk.SetID(db.NewID())
 	tsk.SetOwner(u)
@@ -27,14 +29,14 @@ func TestTaskAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	changes := data.FilterKind(db.Changes(), models.TaskKind)
+	<-*changes
 
 	ctx, stop := context.WithCancel(context.Background())
 	go agents.TaskAgent(ctx, db, u)
 	defer stop()
 
 	// give control to agent thread
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(1 * time.Millisecond)
 
 	_, err = event.TaskMakeGoal(db, tsk)
 	if err != nil {
@@ -57,4 +59,27 @@ func TestTaskAgent(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("Timed out waiting for task update")
 	}
+
+	_, err = event.TaskDropGoal(db, tsk)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	select {
+	case taskChange := <-*changes:
+		changedTask := taskChange.Record.(*models.Task)
+
+		t.Logf("Changed task:\n%+v", changedTask)
+
+		if !data.Equivalent(tsk, changedTask) {
+			t.Fatal("Expected the changed task to be the same one")
+		}
+
+		if len(changedTask.TagsIds) != 0 {
+			t.Fatal("Expected changed task to have no tags")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Timed out waiting for task update")
+	}
+
 }
