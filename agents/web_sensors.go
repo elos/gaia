@@ -48,12 +48,22 @@ func webSensorLocation(db data.DB, u *models.User, eventData map[string]interfac
 		log.Fatal(err)
 	}
 
+	lat, ok := eventData["latitude"].(float64)
+	if !ok {
+		return // bail
+	}
+
+	lon, ok := eventData["longitude"].(float64)
+	if !ok {
+		return // bail
+	}
+
 	_, _, err = event.LocationUpdate(
 		db,
 		u,
 		0,
-		eventData["latitude"].(float64),
-		eventData["longitude"].(float64),
+		lat,
+		lon,
 		webTag,
 	)
 
