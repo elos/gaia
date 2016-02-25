@@ -13,35 +13,38 @@ import (
 	"golang.org/x/net/context"
 )
 
-func TestLocationAgent(t *testing.T) {
+func TestWebSensorsAgent(t *testing.T) {
 	db := mem.NewDB()
 	u, _, err := user.Create(db, "username", "password")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	changes := data.FilterKind(db.Changes(), models.ProfileKind)
+	changes := data.FilterKind(db.Changes(), models.EventKind)
 
 	ctx, stop := context.WithCancel(context.Background())
-	go agents.LocationAgent(ctx, db, u)
+	go agents.WebSensorsAgent(ctx, db, u)
 	defer stop()
 
 	// give control to agent thread
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(1 * time.Millisecond)
 
-	_, loc, err := event.LocationUpdate(db, u, 50, 50, 50)
+	_, err = event.WebSensorLocation(db, u, 50, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	select {
-	case profileChange := <-*changes:
-		p := profileChange.Record.(*models.Profile)
+	// read off the event we just created
+	<-*changes
 
-		if loc.Id != p.LocationId {
-			t.Fatal("Expected profile's location id to now match be the new location ")
+	select {
+	case eventChange := <-*changes:
+		e := eventChange.Record.(*models.Event)
+
+		if e.Name != "Location Update" {
+			t.Fatal("Expected a location update to be produced")
 		}
 	case <-time.After(100 * time.Millisecond):
-		t.Fatal("Timed out waiting for profile update")
+		t.Fatal("Timed out waiting for event creation")
 	}
 }
