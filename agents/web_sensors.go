@@ -43,6 +43,7 @@ Run:
 }
 
 func webSensorLocation(db data.DB, u *models.User, eventData map[string]interface{}) {
+	log.Printf("%++v", eventData)
 	webTag, err := tag.ForName(db, u, "WEB")
 	if err != nil {
 		log.Fatal(err)
