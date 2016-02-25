@@ -27,7 +27,7 @@ func TestLocationAgent(t *testing.T) {
 	defer stop()
 
 	// give control to agent thread
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(1 * time.Millisecond)
 
 	_, loc, err := event.LocationUpdate(db, u, 50, 50, 50)
 	if err != nil {
