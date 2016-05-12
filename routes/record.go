@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -622,34 +621,26 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 
 func ContextualizeRecordChangesGET(ctx context.Context, db data.DB, logger services.Logger) websocket.Handler {
 	return func(ws *websocket.Conn) {
-		log.Print("HEYO")
 		if err := ws.Request().ParseForm(); err != nil {
 			logger.Print("Failure parsing form")
 			return
 		}
-		log.Print("ONE")
 		public := ws.Request().Form.Get("public")
 		private := ws.Request().Form.Get("private")
-		log.Print("public: ", public)
-		log.Print("private: ", private)
 
 		if public == "" || private == "" {
 			logger.Print("failed to retrieve credentials")
 			return
 		}
-		log.Print("TWO")
 
 		cred, err := access.Authenticate(db, public, private)
-		log.Print(err)
 		if err != nil {
 			logger.Print("failed to auth")
 			return
 		}
-		log.Print("EEY")
 
 		u, _ := cred.Owner(db)
 		RecordChangesGET(user.NewContext(ctx, u), ws, db, logger)
-		log.Print("done")
 	}
 }
 
