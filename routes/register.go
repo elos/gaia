@@ -2,46 +2,55 @@ package routes
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
 	"net/http"
 
 	"github.com/elos/data"
+	"github.com/elos/gaia/services"
 	"github.com/elos/models/user"
 	"golang.org/x/net/context"
 )
 
-const usernameParam = "username"
-const passwordParam = "password"
+// These are the expected parameters to the RegisterPOST.
+const (
+	usernameParam = "username"
+	passwordParam = "password"
+)
 
-func RegisterPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB) {
+// RegisterPOST handles a request to create a new elos user.
+func RegisterPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
+	l := logger.WithPrefix("RegisterPOST: ")
+
 	if err := r.ParseForm(); err != nil {
-		log.Printf("RegisterPOST Error: %s", err)
+		l.Printf("error: parsing form: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	username := r.Form[usernameParam]
+	username := r.FormValue(usernameParam)
 	if len(username) == 0 {
-		http.Error(w, "You must specifiy a username", http.StatusBadRequest)
+		l.Print("no username found")
+		http.Error(w, fmt.Sprintf("You must specify a %q parameter", usernameParam), http.StatusBadRequest)
 		return
 	}
 
-	password := r.Form[passwordParam]
+	password := r.FormValue(passwordParam)
 	if len(password) == 0 {
-		http.Error(w, "You must specifiy a password", http.StatusBadRequest)
+		l.Print("no password found")
+		http.Error(w, fmt.Sprintf("You must specify a %q parameter", passwordParam), http.StatusBadRequest)
 		return
 	}
 
-	u, _, err := user.Create(db, username[0], password[0])
+	u, _, err := user.Create(db, username, password)
 	if err != nil {
-		log.Printf("RegisterPOST Error: creating user: %s", err)
+		l.Printf("error: creating user: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	bytes, err := json.Marshal(u)
 	if err != nil {
-		log.Print("RegisterPOST Error: marshalling user json")
+		l.Print("error: marshalling user json")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
