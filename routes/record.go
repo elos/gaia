@@ -32,6 +32,10 @@ const (
 	limitParam = "limit"
 	batchParam = "batch"
 	skipParam  = "skip"
+
+	// /record/changes/ specific:
+	publicParam  = "public"
+	privateParam = "private"
 )
 
 // --- }}}
@@ -108,8 +112,8 @@ func RecordGET(ctx context.Context, w http.ResponseWriter, r *http.Request, logg
 	// Secure the kind parameter's existence, and superficial validity (i.e., non-empty)
 	k := r.FormValue(kindParam)
 	if k == "" {
-		l.Printf("no kind paramter")
-		http.Error(w, fmt.Sprintf("You must specify a '%s' paramter", kindParam), http.StatusBadRequest)
+		l.Printf("no kind parameter")
+		http.Error(w, fmt.Sprintf("You must specify a '%s' parameter", kindParam), http.StatusBadRequest)
 		return
 	}
 	kind := data.Kind(k)
@@ -117,8 +121,8 @@ func RecordGET(ctx context.Context, w http.ResponseWriter, r *http.Request, logg
 	// Secure the id parameter's existence, and superficial validity (i.e., non-empty)
 	i := r.FormValue(idParam)
 	if i == "" {
-		l.Printf("no id paramter")
-		http.Error(w, fmt.Sprintf("You must specify a '%s' paramter", idParam), http.StatusBadRequest)
+		l.Printf("no id parameter")
+		http.Error(w, fmt.Sprintf("You must specify a '%s' parameter", idParam), http.StatusBadRequest)
 		return
 	}
 
@@ -243,7 +247,7 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, log
 	k := r.FormValue(kindParam)
 	if k == "" {
 		l.Printf("no kind specified")
-		http.Error(w, fmt.Sprintf("You must specify a %q paramter", kindParam), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("You must specify a %q parameter", kindParam), http.StatusBadRequest)
 		return
 	}
 	kind := data.Kind(k)
@@ -395,7 +399,7 @@ func RecordDELETE(ctx context.Context, w http.ResponseWriter, r *http.Request, l
 	k := r.FormValue(kindParam)
 	if k == "" {
 		l.Printf("no kind specified")
-		http.Error(w, fmt.Sprintf("You must specify a %q paramter", kindParam), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("You must specify a %q parameter", kindParam), http.StatusBadRequest)
 		return
 	}
 	kind := data.Kind(k)
@@ -404,7 +408,7 @@ func RecordDELETE(ctx context.Context, w http.ResponseWriter, r *http.Request, l
 	i := r.FormValue(idParam)
 	if i == "" {
 		l.Printf("no id specified")
-		http.Error(w, fmt.Sprintf("You must specify a %q paramter", idParam), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("You must specify a %q parameter", idParam), http.StatusBadRequest)
 		return
 	}
 
@@ -522,12 +526,12 @@ func RecordOPTIONS(ctx context.Context, w http.ResponseWriter, r *http.Request) 
 // Error:
 //		* InternalServerError: parsing url params,
 //		* BadRequest: no kind parameter, unrecognized kind
-func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, l services.Logger, db data.DB) {
-	var err error
+func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, logger services.Logger, db data.DB) {
+	l := logger.WithPrefix("RecordQueryPOST: ")
 
 	// Parse the form
-	if err = r.ParseForm(); err != nil {
-		l.Printf("RecordQueryPOST Error: %s", err)
+	if err := r.ParseForm(); err != nil {
+		l.Printf("error parsing form: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -535,14 +539,16 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 	// Retrieve the kind parameter
 	k := r.FormValue(kindParam)
 	if k == "" {
-		http.Error(w, "You must specify a kind", http.StatusBadRequest)
+		l.Printf("no kind parameter")
+		http.Error(w, fmt.Sprintf("You must specify a %q parameter", kindParam), http.StatusBadRequest)
 		return
 	}
 	kind := data.Kind(k)
 
 	// Verify the kind is recognized
 	if _, ok := models.Kinds[kind]; !ok {
-		http.Error(w, fmt.Sprintf("The kind '%s' is not recognized", kind), http.StatusBadRequest)
+		l.Printf("unrecognized kind %q", kind)
+		http.Error(w, fmt.Sprintf("The kind %q is not recognized", kind), http.StatusBadRequest)
 		return
 	}
 
@@ -563,9 +569,10 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 
 	// Read the selection attrs from the body
 	var requestBody []byte
+	var err error
 	defer r.Body.Close()
 	if requestBody, err = ioutil.ReadAll(r.Body); err != nil {
-		l.Printf("RecordQueryPOST Error: while reading request body: %s", err)
+		l.Printf("error while reading request body: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -576,8 +583,8 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 	// only unmarshall if there is any request body
 	if len(requestBody) > 0 {
 		if err = json.Unmarshal(requestBody, &attrs); err != nil {
-			l.Printf("RecordQueryPOST Info: request body:\n%s", string(requestBody))
-			l.Printf("RecordQueryPOST Error: while unmarshalling request body, %s", err)
+			l.Printf("info: request body:\n%s", string(requestBody))
+			l.Printf("error: while unmarshalling request body, %s", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -586,7 +593,7 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 	// Retrieve the user we are acting on behalf
 	u, ok := user.FromContext(ctx)
 	if !ok {
-		l.Print("RecordQueryPOST Error: failed to retrieve user from context")
+		l.Print("failed to retrieve user from context")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -594,7 +601,7 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 	// Load our actual query
 	var iter data.Iterator
 	if iter, err = db.Query(kind).Select(attrs).Limit(limit).Batch(batch).Skip(skip).Execute(); err != nil {
-		l.Printf("RecordQueryPOST Error: while executing query, %s", err)
+		l.Printf("db.Query(%q).Select(%v).Limit(%d).Batch(%d).Skip(%d) error: %s", kind, attrs, limit, batch, skip, err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -605,7 +612,7 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 	for iter.Next(m) {
 		if ok, err := access.CanRead(db, u, m); err != nil {
 			// We've hit an error and need to bail
-			l.Printf("RecordQueryPOST Error: while processing query, %s", err)
+			l.Printf("access.CanRead error: %s", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		} else if ok {
@@ -615,14 +622,14 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 	}
 
 	if err := iter.Close(); err != nil {
-		l.Printf("RecordQueryPOST Error: while loading query, %s", err)
+		l.Printf("error closing query, %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	returnBody, err := json.MarshalIndent(results, "", "    ")
 	if err != nil {
-		l.Printf("RecordQueryPOST Error: while loading query, %s", err)
+		l.Printf("error marshalling JSON: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -634,86 +641,105 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 
 // --- }}}
 
+// --- {Contextualize}RecordChangesGET {{{
+
 func ContextualizeRecordChangesGET(ctx context.Context, db data.DB, logger services.Logger) websocket.Handler {
 	return func(ws *websocket.Conn) {
+		defer ws.Close()
+
+		l := logger.WithPrefix("ContextualizeRecordChangesGET: ")
+
 		if err := ws.Request().ParseForm(); err != nil {
-			logger.Print("Failure parsing form")
+			l.Printf("error parsing form: %s", err)
 			return
 		}
-		public := ws.Request().Form.Get("public")
-		private := ws.Request().Form.Get("private")
+
+		public := ws.Request().Form.Get(publicParam)
+		private := ws.Request().Form.Get(privateParam)
 
 		if public == "" || private == "" {
-			logger.Print("failed to retrieve credentials")
+			l.Print("failed to retrieve credentials")
 			return
 		}
 
 		cred, err := access.Authenticate(db, public, private)
 		if err != nil {
-			logger.Print("failed to auth")
+			l.Print("failed to authenticate")
 			return
 		}
 
-		u, _ := cred.Owner(db)
-		RecordChangesGET(user.NewContext(ctx, u), ws, db, logger)
+		if u, err := cred.Owner(db); err != nil {
+			l.Print("error retrieving user: %s", err)
+		} else {
+			RecordChangesGET(user.NewContext(ctx, u), ws, db, logger)
+		}
 	}
 }
 
 func RecordChangesGET(ctx context.Context, ws *websocket.Conn, db data.DB, logger services.Logger) {
+	l := logger.WithPrefix("RecordChangesGet: ")
+
 	u, ok := user.FromContext(ctx)
 	if !ok {
-		logger.Print("RecordChangesGET Error: failed to retrieve user from context")
+		l.Print("failed to retrieve user from context")
 		return
-	}
-
-	var kind data.Kind
-	kindParam := ws.Request().Form.Get("kind")
-
-	if kindParam != "" {
-		kind = data.Kind(kindParam)
-		if _, ok := models.Kinds[kind]; !ok {
-			logger.Printf("RecordChangesGET Error: unrecognized kind: '%s':", kind)
-			websocket.Message.Send(ws, fmt.Sprintf("The kind '%s' is not recognized", kind))
-			return
-		}
 	}
 
 	// Get the db's changes, then filter by updates, then
 	// filter by whether this user can read the record
 	changes := data.Filter(db.Changes(), func(c *data.Change) bool {
-		ok, _ := access.CanRead(db, u, c.Record)
+		ok, err := access.CanRead(db, u, c.Record)
+		if err != nil {
+			l.Printf("error checking access control: %s", err)
+		}
 		return ok
 	})
 
-	// If a kind was specified, filter by than
-	if kind != data.Kind("") {
+	var kind data.Kind
+	if kindParam := ws.Request().Form.Get(kindParam); kindParam != "" {
+		kind = data.Kind(kindParam)
+
+		if _, ok := models.Kinds[kind]; !ok {
+			l.Printf("unrecognized kind: %q", kind)
+			if err := websocket.Message.Send(ws, fmt.Sprintf("The kind %q is not recognized", kind)); err != nil {
+				if err != io.EOF {
+					l.Printf("error sending on websocket: %s", err)
+				}
+			}
+			return
+		}
+
+		// If a kind was specified, filter by it
 		changes = data.FilterKind(changes, kind)
 	}
 
 	for {
 		select {
 		case change, ok := <-*changes:
-			logger.Printf("Recieved Change: %+v", change)
-			// channel was closed
 			if !ok {
-				logger.Printf("Change channel was closed")
+				l.Printf("change channel was closed")
 				return
 			}
+
+			l.Printf("recieved change: %+v", change)
 
 			changeTransport := transfer.Change(change)
 
 			if err := websocket.JSON.Send(ws, changeTransport); err != nil {
 				if err != io.EOF {
-					logger.Printf("Error reading from socket: %s", err)
+					l.Printf("error sending to socket: %s", err)
 				}
 
 				return
 			}
 		case <-time.After(5 * time.Second):
-			logger.Printf("No change in 5 seconds, but still listening")
+			l.Printf("no change in 5 seconds, but still listening")
 		case <-ctx.Done():
+			l.Printf("context cancelled")
 			// context was cancelled
 			return
 		}
 	}
 }
+
+// --- }}}
