@@ -55,6 +55,17 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 		}
 	}, s.Logger))
 
+	// /login/
+	mux.HandleFunc(routes.Login, logRequest(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			routes.RegisterPOST(requestBackground, w, r, s.DB, s.Logger)
+		default:
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+	}, s.Logger))
+
 	// /record/
 	mux.HandleFunc(routes.Record, logRequest(cors(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {

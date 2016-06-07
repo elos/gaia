@@ -1,7 +1,9 @@
 package routes
 
 const (
-	Register       = "/register/"
+	Register = "/register/"
+	Login    = "/login/"
+
 	Record         = "/record/"
 	RecordQuery    = "/record/query/"
 	RecordChanges  = "/record/changes/"
