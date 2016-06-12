@@ -244,6 +244,8 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, log
 		return
 	}
 
+	l.Printf("%+v", r)
+
 	// Retrieve the kind parameter
 	k := r.FormValue(kindParam)
 	if k == "" {
@@ -303,7 +305,14 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, log
 	// We need to check either [creation] we can create the record or [!creation]
 	// we can update the record we are trying to update
 	if creation {
-		allowed, err = access.CanCreate(db, u, m)
+		prop, ok := m.(access.Property)
+		if !ok {
+			l.Printf("tried to create record that isn't property")
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+
+		allowed, err = access.CanCreate(db, u, prop)
 	} else {
 		allowed, err = access.CanWrite(db, u, m)
 	}
