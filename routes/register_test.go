@@ -16,8 +16,8 @@ import (
 	"golang.org/x/net/context"
 )
 
-// TestingRegisterPOST tests a POST request to the '/register/' endpoint
-// in the happy case, that is the username and password are present.
+// TestRegisterPOST tests a POST request to the '/register/' endpoint
+// in the happy case (i.e., the username and password are present).
 // We verify:
 //   * Response contains the user
 //   * A user and a credential are created

@@ -49,6 +49,7 @@ const (
 //
 // Use for any requests which expect to act on behalf of a user (which is most)
 func Authenticate(ctx context.Context, w http.ResponseWriter, r *http.Request, l services.Logger, db services.DB) (context.Context, bool) {
+	l = l.WithPrefix("routes.Authenticate: ")
 	var (
 		c   *models.Credential
 		u   *models.User
@@ -57,18 +58,18 @@ func Authenticate(ctx context.Context, w http.ResponseWriter, r *http.Request, l
 
 	public, private, ok := r.BasicAuth()
 	if !ok {
-		l.Printf("routes.Authenticate Error: authentication failed: couldn't retrieve basic auth")
+		l.Printf("authentication failed: couldn't retrieve basic auth")
 		// assume std lib didn't make a mistake, and the BasicAuth simply wasn't given
 		goto unauthorized
 	}
 
 	if c, err = access.Authenticate(db, public, private); err != nil {
-		l.Printf("routes.Authenticate Error: authentication of (%s, %s) failed: couldn't find credential: %s", public, private, err)
+		l.Printf("authentication of (%s, %s) failed: couldn't find credential: %s", public, private, err)
 		goto unauthorized // this error is on us, but it manifests as a failure to authenticate
 	}
 
 	if u, err = c.Owner(db); err != nil {
-		l.Printf("routes.Authenticate Error: authentication failed: couldn't load user's owner: %s", err)
+		l.Printf("authentication failed: couldn't load user's owner: %s", err)
 		goto unauthorized // this error is also on us, but also manifests as a failure to authenticate
 	}
 

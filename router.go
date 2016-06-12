@@ -114,6 +114,22 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 		}
 	}), s.Logger))
 
+	// /event/
+	mux.HandleFunc(routes.Event, logRequest(cors(func(w http.ResponseWriter, r *http.Request) {
+		ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
+		if !ok {
+			return
+		}
+
+		switch r.Method {
+		case "POST":
+			routes.EventPOST(ctx, w, r, s.DB, s.Logger)
+		default:
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+	}), s.Logger))
+
 	// /record/changes/
 	mux.HandleFunc(routes.RecordChanges, logRequest(websocket.Handler(
 		routes.ContextualizeRecordChangesGET(requestBackground, s.DB, s.Logger),

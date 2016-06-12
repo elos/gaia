@@ -7,6 +7,7 @@ const (
 	Record         = "/record/"
 	RecordQuery    = "/record/query/"
 	RecordChanges  = "/record/changes/"
+	Event          = "/event/"
 	CommandSMS     = "/command/sms/"
 	CommandWeb     = "/command/web/"
 	CommandiOS     = "/command/ios/"
