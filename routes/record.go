@@ -58,9 +58,30 @@ func Authenticate(ctx context.Context, w http.ResponseWriter, r *http.Request, l
 
 	public, private, ok := r.BasicAuth()
 	if !ok {
-		l.Printf("authentication failed: couldn't retrieve basic auth")
+		l.Printf("authentication reverting from basic auth to params")
 		// assume std lib didn't make a mistake, and the BasicAuth simply wasn't given
-		goto unauthorized
+		// fall back to cookie
+
+		if sesh, err := session(r, db); err != nil {
+			switch err {
+			case http.ErrNoCookie:
+				l.Printf("no session cookie")
+			case data.ErrNotFound:
+				l.Printf("session token not found")
+			default:
+				l.Printf("session(r, db) error: %s", err)
+			}
+
+			l.Printf("authentication reverting from cookie to form values")
+			public, private = r.FormValue(publicParam), r.FormValue(privateParam)
+		} else {
+			if u, err := sesh.Owner(db); err != nil {
+				l.Printf("sesh.Owner(db) error: %s", err)
+				public, private = r.FormValue(publicParam), r.FormValue(privateParam)
+			} else {
+				return user.NewContext(ctx, u), true
+			}
+		}
 	}
 
 	if c, err = access.Authenticate(db, public, private); err != nil {
