@@ -1,8 +1,10 @@
 package services
 
 import (
+	"fmt"
 	"io"
 	"log"
+	"os"
 	"testing"
 )
 
@@ -29,20 +31,18 @@ func NewLogger(out io.Writer) Logger {
 }
 
 func (l *logger) Fatal(v ...interface{}) {
-	l.Logger.Fatal(append([]interface{}{l.prefix}, v...))
+	l.Logger.Output(2, fmt.Sprint(v...))
+	os.Exit(1)
 }
 
 func (l *logger) Fatalf(format string, v ...interface{}) {
-	l.Logger.Fatalf(l.prefix+format, v...)
+	l.Output(2, fmt.Sprint(v...))
+	os.Exit(1)
 }
 
-func (l *logger) Print(v ...interface{}) {
-	l.Logger.Print(append([]interface{}{l.prefix}, v...))
-}
+func (l *logger) Print(v ...interface{}) { l.Output(2, fmt.Sprint(v...)) }
 
-func (l *logger) Printf(format string, v ...interface{}) {
-	l.Logger.Printf(l.prefix+format, v...)
-}
+func (l *logger) Printf(format string, v ...interface{}) { l.Output(2, fmt.Sprintf(format, v...)) }
 
 func (l *logger) WithPrefix(s string) Logger {
 	return &logger{
