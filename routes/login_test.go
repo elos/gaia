@@ -21,13 +21,18 @@ func TestLoginPOST(t *testing.T) {
 	ctx := context.Background()
 	db := mem.NewDB()
 	logger := services.NewTestLogger(t)
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	m := http.NewServeMux()
+	m.Handle("/login/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx, ok := routes.Authenticate(ctx, w, r, logger, db)
 		if !ok {
 			t.Fatal("bad authentication")
 		}
 		routes.LoginPOST(ctx, w, r, db, logger)
 	}))
+	m.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	s := httptest.NewServer(http.HandlerFunc(m.ServeHTTP))
 	defer s.Close()
 
 	_, _, err := user.Create(db, "username", "password")
@@ -35,7 +40,7 @@ func TestLoginPOST(t *testing.T) {
 		t.Fatalf("user.Create(db, \"username\", \"password\") error: %s", err)
 	}
 
-	req, err := http.NewRequest("GET", s.URL, new(bytes.Buffer))
+	req, err := http.NewRequest("GET", s.URL+"/login/", new(bytes.Buffer))
 	if err != nil {
 		t.Fatalf("http.NewRequest error: %s", err)
 	}
@@ -50,7 +55,6 @@ func TestLoginPOST(t *testing.T) {
 	}
 
 	resp, err := client.Do(req)
-	defer resp.Body.Close()
 
 	if err != nil {
 		t.Fatalf("error posting to LoginPOST: %s", err)

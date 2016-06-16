@@ -13,6 +13,9 @@ const (
 	CommandiOS     = "/command/ios/"
 	MobileLocation = "/mobile/location/"
 
-	App   = "/app/"
-	Index = "/"
+	App         = "/app/"
+	Index       = "/"
+	Records     = "/records/"
+	RecordsNew  = "/records/new/"
+	RecordsEdit = "/records/edit/"
 )

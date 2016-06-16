@@ -44,11 +44,75 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 
 	mux.Handle("/app/", http.StripPrefix("/app/", http.FileServer(s.AppFileSystem)))
 
+	mux.HandleFunc(routes.Index, logRequest(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET":
+			ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
+			if !ok {
+				return
+			}
+			routes.RegisterGET(ctx, w, r, s.DB, s.Logger)
+		default:
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+	}, s.Logger))
+
+	// /records/
+	mux.HandleFunc(routes.Records, logRequest(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET":
+			ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
+			if !ok {
+				return
+			}
+			routes.RecordsGET(ctx, w, r, s.DB, s.Logger)
+		default:
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+	}, s.Logger))
+
+	// /records/new/
+	mux.HandleFunc(routes.RecordsNew, logRequest(func(w http.ResponseWriter, r *http.Request) {
+		ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
+		if !ok {
+			return
+		}
+
+		switch r.Method {
+		case "GET":
+			routes.RecordsNewGET(ctx, w, r, s.DB, s.Logger)
+		case "POST":
+			routes.RecordsNewPOST(ctx, w, r, s.DB, s.Logger)
+		default:
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+	}, s.Logger))
+
+	// /records/edit/
+	mux.HandleFunc(routes.RecordsEdit, logRequest(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET":
+			ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
+			if !ok {
+				return
+			}
+			routes.RecordsEditGET(ctx, w, r, s.DB, s.Logger)
+		default:
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+	}, s.Logger))
+
 	// /register/
 	mux.HandleFunc(routes.Register, logRequest(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
 			routes.RegisterPOST(requestBackground, w, r, s.DB, s.Logger)
+		case "GET":
+			routes.RegisterGET(requestBackground, w, r, s.DB, s.Logger)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
@@ -57,9 +121,17 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 
 	// /login/
 	mux.HandleFunc(routes.Login, logRequest(func(w http.ResponseWriter, r *http.Request) {
+
 		switch r.Method {
 		case "POST":
-			routes.RegisterPOST(requestBackground, w, r, s.DB, s.Logger)
+			ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
+			if !ok {
+				return
+			}
+
+			routes.LoginPOST(ctx, w, r, s.DB, s.Logger)
+		case "GET":
+			routes.LoginGET(requestBackground, w, r, s.DB, s.Logger)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return

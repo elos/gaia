@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"text/template"
 
 	"github.com/elos/data"
 	"github.com/elos/gaia/services"
@@ -57,4 +58,30 @@ func RegisterPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, d
 
 	w.WriteHeader(http.StatusCreated)
 	w.Write(bytes)
+}
+
+const registerTemplateRaw = `
+<html>
+	<body>
+		<form method="post">
+			<fieldset>
+				<legend>Register:</legend>
+				<input type="text" name="username" placeholder="username" />
+				<input type="text" name="password" placeholder="password" />
+				<input type="submit" />
+			</fieldset>
+		</form>
+		<a href="/login/">Login</a>
+	</body>
+</html>
+`
+
+var registerTemplate = template.Must(template.New("register").Parse(registerTemplateRaw))
+
+func RegisterGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
+	l := logger.WithPrefix("RegisterGET: ")
+
+	if err := registerTemplate.Execute(w, nil); err != nil {
+		l.Fatal(err)
+	}
 }

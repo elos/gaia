@@ -2,6 +2,7 @@ package routes
 
 import (
 	"net/http"
+	"text/template"
 
 	"github.com/elos/data"
 	"github.com/elos/gaia/services"
@@ -19,6 +20,7 @@ func cookie(s *models.Session) *http.Cookie {
 		Name:    sessionCookie,
 		Value:   s.Token,
 		Expires: s.Expires(),
+		Path:    "/",
 	}
 }
 
@@ -49,7 +51,33 @@ func LoginPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db d
 	}
 
 	http.SetCookie(w, cookie(s))
-	w.WriteHeader(http.StatusAccepted)
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+const loginTemplateRaw = `
+<html>
+	<body>
+		<form method="post">
+			<fieldset>
+				<legend>Login:</legend>
+				<input type="text" name="public"  placeholder="public"  />
+				<input type="text" name="private" placeholder="private" />
+				<input type="submit" />
+			</fieldset>
+		</form>
+		<a href="/register/">Register</a>
+	</body>
+</html>
+`
+
+var loginTemplate = template.Must(template.New("login").Parse(loginTemplateRaw))
+
+func LoginGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
+	l := logger.WithPrefix("LoginGET: ")
+
+	if err := loginTemplate.Execute(w, nil); err != nil {
+		l.Fatal(err)
+	}
 }
 
 func AppHomeGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {

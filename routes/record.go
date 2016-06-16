@@ -58,7 +58,7 @@ func Authenticate(ctx context.Context, w http.ResponseWriter, r *http.Request, l
 
 	public, private, ok := r.BasicAuth()
 	if !ok {
-		l.Printf("authentication reverting from basic auth to params")
+		l.Printf("authentication reverting from basic auth to session")
 		// assume std lib didn't make a mistake, and the BasicAuth simply wasn't given
 		// fall back to cookie
 
@@ -74,13 +74,16 @@ func Authenticate(ctx context.Context, w http.ResponseWriter, r *http.Request, l
 
 			l.Printf("authentication reverting from cookie to form values")
 			public, private = r.FormValue(publicParam), r.FormValue(privateParam)
-		} else {
+		} else if sesh.Valid() {
 			if u, err := sesh.Owner(db); err != nil {
 				l.Printf("sesh.Owner(db) error: %s", err)
 				public, private = r.FormValue(publicParam), r.FormValue(privateParam)
 			} else {
 				return user.NewContext(ctx, u), true
 			}
+		} else {
+			l.Printf("session no longer valid")
+			public, private = r.FormValue(publicParam), r.FormValue(privateParam)
 		}
 	}
 
