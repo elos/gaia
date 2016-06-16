@@ -276,6 +276,7 @@ func TestRecordsEditGET(t *testing.T) {
 	}
 
 	e := new(models.Event)
+	e.SetID(db.NewID())
 	e.SetOwner(u)
 	e.Name = "eventname"
 	if err := db.Save(e); err != nil {

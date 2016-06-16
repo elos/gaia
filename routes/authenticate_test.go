@@ -133,6 +133,7 @@ func TestAuthenticateSession(t *testing.T) {
 	}
 
 	sesh := models.NewSessionForUser(u)
+	sesh.SetID(db.NewID())
 	if err := db.Save(sesh); err != nil {
 		t.Fatalf("db.Save(sesh) error: %s", err)
 	}

@@ -43,9 +43,10 @@ func LoginPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db d
 	}
 
 	s := models.NewSessionForUser(u)
+	s.SetID(db.NewID())
 
 	if err := db.Save(s); err != nil {
-		l.Print("failed to save session: %s", err)
+		l.Printf("failed to save session: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
