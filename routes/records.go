@@ -253,24 +253,26 @@ func RecordsNewPOST(ctx context.Context, w http.ResponseWriter, r *http.Request,
 // --- const recordsEditTemplateRaw {{{
 const recordsEditTemplateRaw = `
 <html>
+	<body>
 	{{with .Flash}}
 		{{.}}
 	{{end}}
-	<body>
+
 	{{$record := .Record}}
 	{{$model := .Model}}
+
 	EXP:
 	{{with .Model}}
 	<form method="post">
-	<table>
-	{{range .Traits}}
-	<tr>
-	<td> <label for="{{.Name}}"> {{.Name}} </label> </td>
-	<td> <input type="text" value="{{ index $record .Name}}" /> </td>
-	</tr>
-	{{end}}
-	</table>
-	<input type="submit" value="Save">
+		<table>
+		{{range .Traits}}
+		<tr>
+		<td> <label for="{{.Name}}"> {{.Name}} </label> </td>
+		<td> <input type="text" value="{{ index $record .Name}}" /> </td>
+		</tr>
+		{{end}}
+		</table>
+		<input type="submit" value="Save">
 	</form>
 	{{end}}
 	<br />
@@ -279,6 +281,8 @@ const recordsEditTemplateRaw = `
 		<input type="text" value="{{.}}" />
 		<input type="submit" value="Save" />
 	</form>
+	{{else}}
+		No JSON
 	{{end}}
 	</body>
 </html>
