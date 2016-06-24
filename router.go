@@ -58,15 +58,15 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 		}
 	}, s.Logger))
 
-	// /records/
-	mux.HandleFunc(routes.Records, logRequest(func(w http.ResponseWriter, r *http.Request) {
+	// /records/query/
+	mux.HandleFunc(routes.RecordsQuery, logRequest(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
 			ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
 			if !ok {
 				return
 			}
-			routes.RecordsGET(ctx, w, r, s.DB, s.Logger)
+			routes.Records.QueryGET(ctx, w, r, s.DB, s.Logger)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
@@ -82,9 +82,25 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 
 		switch r.Method {
 		case "GET":
-			routes.RecordsNewGET(ctx, w, r, s.DB, s.Logger)
+			routes.Records.NewGET(ctx, w, r, s.DB, s.Logger)
 		case "POST":
-			routes.RecordsNewPOST(ctx, w, r, s.DB, s.Logger)
+			routes.Records.NewPOST(ctx, w, r, s.DB, s.Logger)
+		default:
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+	}, s.Logger))
+
+	// /records/create/
+	mux.HandleFunc(routes.RecordsCreate, logRequest(func(w http.ResponseWriter, r *http.Request) {
+		ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
+		if !ok {
+			return
+		}
+
+		switch r.Method {
+		case "GET":
+			routes.Records.CreateGET(ctx, w, r, s.DB, s.Logger)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
@@ -99,7 +115,7 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 			if !ok {
 				return
 			}
-			routes.RecordsEditGET(ctx, w, r, s.DB, s.Logger)
+			routes.Records.EditGET(ctx, w, r, s.DB, s.Logger)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return

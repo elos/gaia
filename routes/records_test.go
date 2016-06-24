@@ -12,6 +12,7 @@ import (
 	"github.com/elos/data"
 	"github.com/elos/data/builtin/mem"
 	"github.com/elos/data/transfer"
+	"github.com/elos/gaia/routes/records"
 	"github.com/elos/gaia/services"
 	"github.com/elos/metis"
 	"github.com/elos/models"
@@ -19,11 +20,11 @@ import (
 	"golang.org/x/net/context"
 )
 
-// --- Test /records/ {{{
+// --- Test /records/query/ {{{
 
-// --- TestRecordsTemplate {{{
+// --- TestRecordsQueryTemplate {{{
 
-func TestRecordsTemplate(t *testing.T) {
+func TestRecordsQueryTemplate(t *testing.T) {
 	db := mem.NewDB()
 
 	creds := make([]map[string]interface{}, 5)
@@ -37,14 +38,14 @@ func TestRecordsTemplate(t *testing.T) {
 		transfer.TransferAttrs(c, &m)
 		creds[i] = m
 	}
-	s := &records{
+	s := &records.QueryData{
 		Kind:    models.CredentialKind,
 		Model:   models.Metis[models.CredentialKind],
 		Records: creds,
 	}
 
 	var b bytes.Buffer
-	if err := recordsTemplate.Execute(&b, s); err != nil {
+	if err := records.QueryTemplate.Execute(&b, s); err != nil {
 		t.Fatalf("template.Execute error: %s", err)
 	}
 
@@ -61,9 +62,9 @@ func TestRecordsTemplate(t *testing.T) {
 
 // --- }}}
 
-// --- TestRecordsGET {{{
+// --- TestRecordsQueryGET {{{
 
-func TestRecordsGET(t *testing.T) {
+func TestRecordsQueryGET(t *testing.T) {
 	ctx := context.Background()
 	db := mem.NewDB()
 	logger := services.NewTestLogger(t)
@@ -73,7 +74,7 @@ func TestRecordsGET(t *testing.T) {
 			t.Fatal("authentication failed")
 		}
 
-		RecordsGET(ctx, w, r, db, logger)
+		Records.QueryGET(ctx, w, r, db, logger)
 	}))
 	defer s.Close()
 
@@ -122,7 +123,7 @@ func TestRecordsGET(t *testing.T) {
 // --- TestRecordsNewTemplate {{{
 
 func TestRecordsNewTemplate(t *testing.T) {
-	rn := &recordsNew{
+	rn := &records.NewData{
 		Flash: "this is the flash",
 		Models: map[data.Kind]*metis.Model{
 			models.UserKind:       models.Metis[models.UserKind],
@@ -132,7 +133,7 @@ func TestRecordsNewTemplate(t *testing.T) {
 	}
 
 	b := new(bytes.Buffer)
-	if err := recordsNewTemplate.Execute(b, rn); err != nil {
+	if err := records.NewTemplate.Execute(b, rn); err != nil {
 		t.Fatalf("recordsNewTemplate.Execute error: %s", err)
 	}
 
@@ -169,7 +170,7 @@ func TestRecordsNewGET(t *testing.T) {
 			t.Fatal("authentication failed")
 		}
 
-		RecordsNewGET(ctx, w, r, db, logger)
+		Records.NewGET(ctx, w, r, db, logger)
 	}))
 	defer s.Close()
 
@@ -221,17 +222,20 @@ func TestRecordsNewGET(t *testing.T) {
 // --- TestRecordsEditTemplate {{{
 
 func TestRecordsEditTemplate(t *testing.T) {
-	re := &recordsEdit{
+	re := &records.EditData{
 		Flash: "this is the flash",
 		Model: models.Metis[models.EventKind],
 		Record: map[string]interface{}{
 			"name": "this is the name",
 		},
+		JSON: `{
+			"name": "this is the name",
+		}`,
 	}
 
 	b := new(bytes.Buffer)
-	if err := recordsEditTemplate.Execute(b, re); err != nil {
-		t.Fatalf("recordsEditTemplate.Execute error: %s", err)
+	if err := records.EditTemplate.Execute(b, re); err != nil {
+		t.Fatalf("records.EditTemplate.Execute error: %s", err)
 	}
 
 	o := b.String()
@@ -266,7 +270,7 @@ func TestRecordsEditGET(t *testing.T) {
 			t.Fatal("authentication failed")
 		}
 
-		RecordsEditGET(ctx, w, r, db, logger)
+		Records.EditGET(ctx, w, r, db, logger)
 	}))
 	defer s.Close()
 

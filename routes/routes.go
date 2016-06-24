@@ -13,9 +13,14 @@ const (
 	CommandiOS     = "/command/ios/"
 	MobileLocation = "/mobile/location/"
 
-	App         = "/app/"
-	Index       = "/"
-	Records     = "/records/"
-	RecordsNew  = "/records/new/"
-	RecordsEdit = "/records/edit/"
+	App   = "/app/"
+	Index = "/"
+
+	// Records Web UI
+	RecordsQuery  = "/records/query/"
+	RecordsNew    = "/records/new/"
+	RecordsCreate = "/records/create/"
+	RecordsEdit   = "/records/edit/"
+	RecordsView   = "/records/view/"
+	RecordsDelete = "/records/delete/"
 )
