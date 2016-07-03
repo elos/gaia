@@ -15,7 +15,6 @@ import (
 var Records = struct {
 	QueryGET   func(context.Context, http.ResponseWriter, *http.Request, data.DB, services.Logger)
 	NewGET     func(context.Context, http.ResponseWriter, *http.Request, data.DB, services.Logger)
-	NewPOST    func(context.Context, http.ResponseWriter, *http.Request, data.DB, services.Logger)
 	CreateGET  func(context.Context, http.ResponseWriter, *http.Request, data.DB, services.Logger)
 	CreatePOST func(context.Context, http.ResponseWriter, *http.Request, data.DB, services.Logger)
 	EditGET    func(context.Context, http.ResponseWriter, *http.Request, data.DB, services.Logger)
@@ -25,7 +24,6 @@ var Records = struct {
 }{
 	QueryGET:   records.QueryGET,
 	NewGET:     records.NewGET,
-	NewPOST:    records.NewPOST,
 	CreateGET:  records.CreateGET,
 	CreatePOST: records.CreatePOST,
 	EditGET:    records.EditGET,

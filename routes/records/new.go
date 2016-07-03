@@ -1,13 +1,10 @@
 package records
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"text/template"
 
 	"github.com/elos/data"
-	"github.com/elos/data/transfer"
 	"github.com/elos/gaia/services"
 	"github.com/elos/metis"
 	"github.com/elos/models"
@@ -27,7 +24,7 @@ const newTemplateRaw = `
 			{{range .Models}}
 			<tr>
 			<td>
-				<form id="{{.Kind}}" method="post">
+				<form id="{{.Kind}}" method="get" action="/records/create/">
 					<input type="text" name="kind" value="{{.Kind}}" /> </td>
 				</form>
 			<td> <button type="submit" form="{{.Kind}}"> New </button> </td>
@@ -50,8 +47,6 @@ type NewData struct {
 }
 
 func NewGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
-	l := logger.WithPrefix("RecordsNewGET: ")
-
 	rn := &NewData{
 		Models: make(map[data.Kind]*metis.Model),
 	}
@@ -63,44 +58,6 @@ func NewGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data
 	}
 
 	if err := NewTemplate.Execute(w, rn); err != nil {
-		l.Fatal(err)
-	}
-}
-
-func NewPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
-	l := logger.WithPrefix("RecordsNewPOST: ")
-
-	k := r.FormValue(kindParam)
-	if k == "" {
-		l.Printf("no kind parameter")
-		http.Error(w, fmt.Sprintf("You must specify a '%s' parameter", kindParam), http.StatusBadRequest)
-		return
-	}
-	kind := data.Kind(k)
-	// Ensure the kind is recognized
-	if _, ok := models.Kinds[kind]; !ok {
-		l.Printf("unrecognized kind: %q", kind)
-		http.Error(w, fmt.Sprintf("The kind %q is not recognized", kind), http.StatusBadRequest)
-		return
-	}
-
-	re := &EditData{
-		Flash:  "You have not created the record yet, you must save",
-		Model:  models.Metis[kind],
-		Record: make(map[string]interface{}),
-	}
-
-	transfer.TransferAttrs(models.ModelFor(kind), &re.Record)
-
-	bytes, err := json.MarshalIndent(re.Record, "", "	")
-	if err != nil {
-		l.Printf("error while marshalling json %s", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-	re.JSON = string(bytes)
-
-	if err := EditTemplate.Execute(w, re); err != nil {
-		l.Fatal(err)
+		logger.Fatalf("NewTemplate.Execute(w, rn) error: %v", err)
 	}
 }

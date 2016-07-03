@@ -1,6 +1,7 @@
 package records
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -15,10 +16,11 @@ import (
 )
 
 const (
-	kindParam  = "kind"
-	limitParam = "limit"
-	batchParam = "batch"
-	skipParam  = "skip"
+	kindParam   = "kind"
+	limitParam  = "limit"
+	batchParam  = "batch"
+	skipParam   = "skip"
+	selectParam = "select"
 )
 
 // --- queryTemplateRaw {{{
@@ -26,53 +28,52 @@ const (
 const queryTemplateRaw = `
 <html>
 	<body>
-		<form method="get">
+		<form id="queryForm" method="get">
 			<fieldset>
 				<legend>Query:</legend>
 				<label for="kind">Kind:</label>
-				<input type="text"   name="kind"  placeholder="string"  {{with .Kind}} value={{. | printf "%q"}} {{end}}/>
+				<input type="text"   name="kind"  placeholder="string"  {{ with .Kind -}}  value="{{- . -}}" {{- end -}} />
 				<label for="limit">Limit:</label>
-				<input type="number" name="limit" placeholder="int" {{with .Limit}} value={{.}} {{end}}/>
+				<input type="number" name="limit" placeholder="int"     {{ with .Limit -}} value="{{- . -}}" {{- end -}} />
 				<label for="batch">Batch:</label>
-				<input type="number" name="batch" placeholder="int" {{with .Batch}} value={{.}} {{end}}/>
+				<input type="number" name="batch" placeholder="int"     {{ with .Batch -}} value="{{- . -}}" {{- end -}} />
 				<label for="skip">Skip:</label>
-				<input type="number" name="skip"  placeholder="int"  {{with .Skip}} value={{.}} {{end}}/>
+				<input type="number" name="skip"  placeholder="int"     {{ with .Skip -}}  value="{{- . -}}" {{- end -}} />
+				<label for="select">Select:</label>
+				<textarea name="select" form="queryForm"> {{- with .Select -}} {{- . -}} {{- end -}} </textarea>
 				<input type="submit" />
 			</fieldset>
 		</form>
-		{{with .Flash}}
-			{{. | printf "%s"}}
-		{{end}}
-
+		{{ with .Flash }} {{- . -}} {{ end }}
 		{{ if .Model }}
 			{{ $traits := .Model.Traits }}
 			<table>
 				<thead>
 					<tr>
-					{{range $traits}}
-						<th>{{.Name}}</th>
-					{{end}}
+					{{ range $traits }}
+						<th>{{ .Name }}</th>
+					{{ end }}
 					</tr>
 				</thead>
 				<tbody>
-					{{range $record := .Records}}
+					{{ range $record := .Records }}
 						<tr>
-						{{range $traits}}
+						{{ range $traits }}
 						<td>
 							{{ index $record .Name }}
 						</td>
-						{{else}}
+						{{ else }}
 							<td>No Traits</td>
-						{{end}}
+						{{ end }}
 						</tr>
-					{{else}}
+					{{ else }}
 						<tr><td>No records</td></tr>
-					{{end}}
+					{{ end }}
 				</tbody>
 			</table>
-		{{else}}
+		{{ else }}
 		No model
-		{{end}}
+		{{ end }}
 	</body>
 </html>
 `
@@ -84,6 +85,7 @@ var QueryTemplate = template.Must(template.New("records/query").Parse(queryTempl
 type QueryData struct {
 	Kind               data.Kind
 	Batch, Limit, Skip int
+	Select             string
 	Flash              string
 	Model              *metis.Model
 	Records            []map[string]interface{}
@@ -123,6 +125,8 @@ func Query(ctx context.Context, r *http.Request, db data.DB, logger services.Log
 		return s, nil
 	}
 
+	s.Kind = kind
+
 	// Retrieve the limit, batch and skip parameters
 	lim := r.FormValue(limitParam)
 	bat := r.FormValue(batchParam)
@@ -141,7 +145,23 @@ func Query(ctx context.Context, r *http.Request, db data.DB, logger services.Log
 	s.Limit = limit
 	s.Batch = batch
 	s.Skip = skip
-	s.Kind = kind
+
+	selectString := r.FormValue(selectParam)
+	attrs := data.AttrMap{}
+	if selectString != "" {
+		if err := json.Unmarshal([]byte(selectString), &attrs); err != nil {
+			l.Printf("json.Unmarshal(bytes(selectString), &attrs) error: %v", err)
+			s.Flash = fmt.Sprintf("Failure unmarshalling json: %v", err)
+			return s, nil
+		}
+	}
+	bytes, err := json.MarshalIndent(attrs, "", "	")
+	if err != nil {
+		l.Printf("json.MarshalIndent error: %v", err)
+		s.Flash = fmt.Sprintf("Failure marshalling json: %v", err)
+		return s, nil
+	}
+	s.Select = string(bytes)
 
 	iter, err := db.Query(s.Kind).Limit(limit).Batch(batch).Skip(skip).Execute()
 	if err != nil {

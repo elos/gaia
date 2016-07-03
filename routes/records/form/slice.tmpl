@@ -1,0 +1,76 @@
+{{ define "main" -}}
+{{- $name := .name -}}
+{{- $Name := .Name -}}
+<fieldset>
+    <legend> {{ .name }} </legend>
+    <table>
+        <tbody id="{{ .name }}-tbody">
+        {{ range $i, $value := .values -}}
+            <tr id="{{ printf "%s[%d]" $name $i }}">
+            <td> {{ marshalPrimitive $Name $value }} </td>
+            <td> {{with dict "name" $name "i" $i }} {{ template "removal" . }} {{ end }} </td>
+            </tr>
+        {{- end }}
+        </tbody>
+    </table>
+    <button type="button" onclick="add{{ .name }}()"> Add {{ .name }} </button>
+    {{ template "script" . }}
+</fieldset>
+{{- end }}
+
+{{ define "removal" -}}
+    <button type="button" onclick="remove{{ .name }}(id{{ .name }}({{- .i -}}))">x</button>
+{{- end }}
+
+{{ define "script" -}}
+<script>
+    {{- $name := .name -}}
+    {{- $Name := .Name -}}
+
+    {{- with .values -}}
+    var num{{ $name }} = {{ len . -}};
+    {{- else -}}
+    var num{{ $name }} = 0;
+    {{- end }}
+
+    function id{{ .name }}(i) {
+        return "{{ .name }}[" + i + "]";
+    }
+
+    function add{{ .name }}() {
+        var row = document.createElement("tr");
+        row.id = id{{ .name }}(num{{ .name }});
+
+        var left = document.createElement("td");
+        var right = document.createElement("td");
+        row.appendChild(left);
+        row.appendChild(right);
+
+        left.innerHTML = "{{ marshalPrimitive .Name .value | printf "%s" }}";
+        right.innerHTML = "<button type='button' onclick='remove{{ .name }}(id{{ .name }}" + num{{ .name }} + "))' >x</button>";
+
+        document.getElementById("{{ .name }}-tbody").appendChild(row);
+        num{{ .name }} += 1;
+    }
+
+    function remove{{ .name }}(i) {
+        var remID = id{{ .name }}(i);
+        var rows = [];
+        for (var i = 0; i < num{{ .name }}; i++) {
+            var id = id{{ .name }}(i);
+            if (id === remID) {
+                document.getElementById(id).remove();
+            } else {
+                rows.push(document.getElementById(id));
+            }
+        }
+
+        for (var i = 0; i < rows.length; i++) {
+            rows[i].setAttribute("id", id{{ .name }}(i));
+            rows[i].children[1].children[0].setAttribute("onclick", "remove{{ .name }}(i)");
+        }
+
+        num{{ .name }} -= 1;
+    }
+</script>
+{{ end }}

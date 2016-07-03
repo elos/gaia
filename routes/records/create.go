@@ -1,14 +1,18 @@
 package records
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
+	"io/ioutil"
 	"net/http"
 
 	"github.com/elos/data"
 	"github.com/elos/gaia/services"
 	"github.com/elos/metis"
 	"github.com/elos/models"
+	"github.com/elos/models/access"
+	"github.com/elos/models/user"
 	"golang.org/x/net/context"
 )
 
@@ -21,7 +25,7 @@ const createTemplateRaw = `
 
 		{{$model := .Model}}
 		{{$json := .JSON}}
-		<form method="post" action="/records/create/">
+		<form enctype="application/json" method="post" action="/records/create/">
 			<fieldset>
 				<legend>Traits</legend>
 				{{range $traitName, $trait := $model.Traits}}
@@ -504,6 +508,7 @@ const createTemplateRaw = `
 					No relations.
 				{{end}}
 			</fieldset>
+			<input type="submit" value="Save" />
 		</form>
 	</body>
 </html>
@@ -575,7 +580,7 @@ func CreateGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db d
 //
 // Parameters:
 //	{
-//		_kind string // escaped kind parameter, in case the record has a kind field
+//		kind string
 //		<arbitrary-fields> {string|[]string}
 //	}
 //
@@ -583,12 +588,115 @@ func CreateGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db d
 // from the form parameters.
 //
 // Success:
-//		* 302, redirect to `/records/view/?kind=<dynamic>&id=<dynamic>` (i.e., redirects to viewing the record
+//		* StatusFound, redirect to `/records/view/?kind=<dynamic>&id=<dynamic>` (i.e., redirects to viewing the record
 //		which was just created
 //
 // Errors:
 //		* 400, malformed parameters
 //		* 404, kind parameter not recognized
 //		* 500, {error parsing, et al.}
-func CreatePOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
+func CreatePOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, l services.Logger) {
+	if err := r.ParseForm(); err != nil {
+		l.Printf("r.ParseForm() error: %v", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	k := r.FormValue(kindParam)
+	if k == "" {
+		l.Printf("r.FormValue(kindParam): got %q, want a non-empty string", k)
+		http.Error(w, fmt.Sprintf("You must specify a %q parameter", kindParam), http.StatusBadRequest)
+		return
+	}
+	kind := data.Kind(k)
+
+	// Lookup the kind to ensure its existence.
+	if _, ok := models.Kinds[kind]; !ok {
+		l.Printf("_, ok := models.Kind[kind]: got %t, want true", ok)
+		http.Error(w, fmt.Sprintf("The kind %q is not recognized", kind), http.StatusNotFound)
+		return
+	}
+
+	m := models.ModelFor(kind)
+
+	var requestBody []byte
+	var err error
+
+	// Now we must read the body of the request
+	defer r.Body.Close() // don't forget to close it
+	if requestBody, err = ioutil.ReadAll(r.Body); err != nil {
+		l.Printf("error while reading request body: %s", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	// Now we unmarshal that into the record
+	if err = json.Unmarshal(requestBody, m); err != nil {
+		l.Printf("info: request body:\n%s", string(requestBody))
+		l.Printf("error: while unmarshalling request body, %s", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	m.SetID(db.NewID())
+
+	// Retrieve our user
+	u, ok := user.FromContext(ctx)
+	if !ok {
+		l.Print("failed to retrieve user from context")
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	prop, ok := m.(access.Property)
+	if !ok {
+		l.Printf("tried to create record that isn't property")
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	allowed, err := access.CanCreate(db, u, prop)
+
+	if err != nil {
+		l.Printf("access.CanCreate error: %s", err)
+		switch err {
+		// This indicates that no, you have no access
+		case data.ErrAccessDenial:
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		// All of these are bad, and considered an internal error
+		case data.ErrNotFound:
+			fallthrough
+		case data.ErrNoConnection:
+			fallthrough
+		case data.ErrInvalidID:
+			fallthrough
+		default:
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
+		return
+	} else if !allowed {
+		l.Printf("access denied at create/update stage")
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	// If we have made it this far, it only remains to commit the record
+	if err = db.Save(m); err != nil {
+		l.Printf("error saving record: %s", err)
+		switch err {
+		case data.ErrAccessDenial:
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		// These are all equally distressing
+		case data.ErrNotFound: // TODO shouldn't a not found not be fing impossible for a Save?
+			fallthrough
+		case data.ErrNoConnection:
+			fallthrough
+		case data.ErrInvalidID:
+		default:
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	http.Redirect(w, r, fmt.Sprintf("/records/view/?kind=%s&id=%s", m.Kind(), m.ID()), http.StatusFound)
 }
