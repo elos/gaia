@@ -163,7 +163,7 @@ func Query(ctx context.Context, r *http.Request, db data.DB, logger services.Log
 	}
 	s.Select = string(bytes)
 
-	iter, err := db.Query(s.Kind).Limit(limit).Batch(batch).Skip(skip).Execute()
+	iter, err := db.Query(s.Kind).Limit(limit).Batch(batch).Skip(skip).Select(attrs).Execute()
 	if err != nil {
 		return nil, err
 	}
