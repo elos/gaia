@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/elos/data"
@@ -40,6 +41,8 @@ func EventPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db d
 		l.Print("no tags param")
 		tagNames = []string{}
 	}
+	// if any tag names have commas, split those
+	tagNames = flatten(mapSplit(tagNames, ","))
 
 	// Retrieve our user
 	u, ok := user.FromContext(ctx)
@@ -122,4 +125,25 @@ func EventPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db d
 	w.WriteHeader(http.StatusCreated)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(b)
+}
+
+func mapSplit(s []string, split string) [][]string {
+	ss := make([][]string, 0, len(s))
+
+	for _, e := range s {
+		ss = append(ss, strings.Split(e, split))
+	}
+
+	return ss
+}
+
+func flatten(ss [][]string) []string {
+	// at least as long as ss.
+	s := make([]string, 0, len(ss))
+
+	for _, e := range ss {
+		s = append(s, e...)
+	}
+
+	return s
 }
