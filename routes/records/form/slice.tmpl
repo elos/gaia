@@ -1,63 +1,63 @@
 {{ define "main" -}}
-{{- $name := .name -}}
-{{- $Name := .Name -}}
+{{- $sanitizedName := .sanitizedName -}}
+{{- $displayName := .displayName -}}
 <fieldset>
-    <legend> {{ .name }} </legend>
+    <legend> {{ $displayName }} </legend>
     <table>
-        <tbody id="{{ .name }}-tbody">
+        <tbody id="{{ $sanitizedName }}-tbody">
         {{ range $i, $value := .values -}}
-            <tr id="{{ printf "%s[%d]" $name $i }}">
-            <td> {{ marshalPrimitive $Name $value }} </td>
-            <td> {{with dict "name" $name "i" $i }} {{ template "removal" . }} {{ end }} </td>
+            <tr id="{{ printf "%s[%d]" $sanitizedName $i }}">
+                <td> {{ marshalSliceValue $displayName $i $value }} </td>
+                <td> {{with dict "sanitizedName" $sanitizedName "i" $i }} {{ template "removal" . }} {{ end }} </td>
             </tr>
         {{- end }}
         </tbody>
     </table>
-    <button type="button" onclick="add{{ .name }}()"> Add {{ .name }} </button>
-    {{ template "script" . }}
+    <button type="button" onclick="add{{ .sanitizedName }}()"> Add {{ .displayName }} </button>
+    {{ template "script" . -}}
 </fieldset>
 {{- end }}
 
 {{ define "removal" -}}
-    <button type="button" onclick="remove{{ .name }}(id{{ .name }}({{- .i -}}))">x</button>
+    <button type="button" onclick="remove{{ .sanitizedName }}(id{{ .sanitizedName }}({{- .i -}}))">x</button>
 {{- end }}
 
-{{ define "script" -}}
+{{ define "script" }}
 <script>
-    {{- $name := .name -}}
-    {{- $Name := .Name -}}
+    {{- $sanitizedName := .sanitizedName -}}
+    {{- $displayName := .displayName -}}
 
-    {{- with .values -}}
-    var num{{ $name }} = {{ len . -}};
+    {{- with .values }}
+    var num{{ $sanitizedName }} = {{ len . -}};
     {{- else -}}
-    var num{{ $name }} = 0;
+    var num{{ $sanitizedName }} = 0;
     {{- end }}
 
-    function id{{ .name }}(i) {
-        return "{{ .name }}[" + i + "]";
+    function id{{ .sanitizedName }}(i) {
+        return "{{ .sanitizedName }}[" + i + "]";
     }
 
-    function add{{ .name }}() {
+    function add{{ .sanitizedName }}() {
         var row = document.createElement("tr");
-        row.id = id{{ .name }}(num{{ .name }});
+        row.id = id{{ .sanitizedName }}(num{{ .sanitizedName }});
 
         var left = document.createElement("td");
         var right = document.createElement("td");
         row.appendChild(left);
         row.appendChild(right);
 
-        left.innerHTML = "{{ marshalPrimitive .Name .value | printf "%s" }}";
-        right.innerHTML = "<button type='button' onclick='remove{{ .name }}(id{{ .name }}" + num{{ .name }} + "))' >x</button>";
+        left.innerHTML = "{{ marshalSliceValue .displayName 1 .value | printf "%s" }}";
+        right.innerHTML = "<button type='button' onclick='remove{{ .sanitizedName }}(id{{ .sanitizedName }}" + num{{ .sanitizedName }} + "))' >x</button>";
 
-        document.getElementById("{{ .name }}-tbody").appendChild(row);
-        num{{ .name }} += 1;
+        document.getElementById("{{ .sanitizedName }}-tbody").appendChild(row);
+        num{{ .sanitizedName }} += 1;
     }
 
-    function remove{{ .name }}(i) {
-        var remID = id{{ .name }}(i);
+    function remove{{ .sanitizedName }}(i) {
+        var remID = id{{ .sanitizedName }}(i);
         var rows = [];
-        for (var i = 0; i < num{{ .name }}; i++) {
-            var id = id{{ .name }}(i);
+        for (var i = 0; i < num{{ .sanitizedName }}; i++) {
+            var id = id{{ .sanitizedName }}(i);
             if (id === remID) {
                 document.getElementById(id).remove();
             } else {
@@ -66,11 +66,11 @@
         }
 
         for (var i = 0; i < rows.length; i++) {
-            rows[i].setAttribute("id", id{{ .name }}(i));
-            rows[i].children[1].children[0].setAttribute("onclick", "remove{{ .name }}(i)");
+            rows[i].setAttribute("id", id{{ .sanitizedName }}(i));
+            rows[i].children[1].children[0].setAttribute("onclick", "remove{{ .sanitizedName }}(" + i + ")");
         }
 
-        num{{ .name }} -= 1;
+        num{{ .sanitizedName }} -= 1;
     }
 </script>
 {{ end }}
