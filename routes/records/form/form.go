@@ -3,9 +3,7 @@ package form
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"html/template"
 	"net/url"
 	"path"
 	"reflect"
@@ -103,57 +101,8 @@ func marshalValue(namespace string, v reflect.Value) ([]byte, error) {
 	}
 }
 
-func marshalPrimitive(name string, i interface{}) (template.HTML, error) {
-	b, err := marshalPrimitiveBytes(name, i)
-	return template.HTML(string(b)), err
-}
-
-func marshalPrimitiveBytes(name string, i interface{}) ([]byte, error) {
-	if i == nil {
-		return nil, nil
-	}
-
-	v := reflect.ValueOf(i)
-	if v.Type().Name() == "Time" {
-		return encodeTime(name, v.Interface().(time.Time)), nil
-	}
-
-	switch v.Kind() {
-	case reflect.Bool:
-		return encodeBool(name, v.Bool()), nil
-	case reflect.Uint:
-		fallthrough
-	case reflect.Uint8:
-		fallthrough
-	case reflect.Uint16:
-		fallthrough
-	case reflect.Uint32:
-		fallthrough
-	case reflect.Uint64:
-		return encodeUint(name, v.Uint()), nil
-	case reflect.Int:
-		fallthrough
-	case reflect.Int8:
-		fallthrough
-	case reflect.Int16:
-		fallthrough
-	case reflect.Int32:
-		fallthrough
-	case reflect.Int64:
-		return encodeInt(name, v.Int()), nil
-	case reflect.Float32:
-		fallthrough
-	case reflect.Float64:
-		return encodeFloat(name, v.Float()), nil
-	case reflect.Ptr:
-		return marshalPrimitiveBytes(name, reflect.Indirect(v))
-	case reflect.String:
-		return encodeString(name, v.String()), nil
-	// The default case is an error, a failure to evaluate the
-	// type of the value and select an adequate marshalling.
-	default:
-		return nil, fmt.Errorf("unable to marshal value %v", v)
-	}
+func encodeTime(name string, quote time.Time) []byte {
+	return []byte(fmt.Sprintf(`<label for="%s">%s</label><input name="%s" type="datetime-local" value="%s" />`, name, path.Base(name), name, quote.Format(time.RFC3339)))
 }
 
 func encodeBool(name string, quote bool) []byte {
@@ -176,41 +125,8 @@ func encodeFloat(name string, quote float64) []byte {
 	return []byte(fmt.Sprintf(`<label for="%s">%s</label><input name="%s" type="number" value="%f" />`, name, path.Base(name), name, quote))
 }
 
-func encodeTime(name string, quote time.Time) []byte {
-	return []byte(fmt.Sprintf(`<label for="%s">%s</label><input name="%s" type="datetime-local" value="%s" />`, name, path.Base(name), name, quote.Format(time.RFC3339)))
-}
-
-func marshalSliceValue(namespace string, index int, value interface{}) (template.HTML, error) {
-	return marshalPrimitive(prepend(namespace, fmt.Sprintf("%d", index)), value)
-}
-
-var sliceTemplate = template.Must(template.New("main").Funcs(template.FuncMap{
-	"dict":              Dict,
-	"marshalSliceValue": marshalSliceValue,
-}).ParseFiles("./slice.tmpl"))
-
-// Dict constructs a map out of the sequential key value pairs provided,
-// Used to construct custom context while in a template. i.e.,
-// if Dict was defined in the funcMap to be "dict"
-// {{template "CallThisTemplate" dict "user" $user "routes" .Data.Routes}}
-// now the CallThisTemplate template  gets a context with .user and .routes defined
-var Dict = func(vals ...interface{}) (map[string]interface{}, error) {
-	if len(vals)%2 != 0 {
-		return nil, errors.New("Must pass element pairs")
-	}
-
-	dict := make(map[string]interface{}, len(vals)/2)
-
-	for i := 0; i < len(vals); i += 2 {
-		key, ok := vals[i].(string)
-		if !ok {
-			return nil, errors.New("Keys must be strings")
-		}
-
-		dict[key] = vals[i+1]
-	}
-
-	return dict, nil
+func encodeString(name, quote string) []byte {
+	return []byte(fmt.Sprintf(`<label for="%s">%s</label><input name="%s" type="text" value="%s" />`, name, path.Base(name), name, quote))
 }
 
 func marshalComposite(name string, v reflect.Value) ([]byte, error) {
@@ -220,23 +136,6 @@ func marshalComposite(name string, v reflect.Value) ([]byte, error) {
 	}
 
 	return []byte(fmt.Sprintf(`<label for="%s">%s</label><textarea name="%s">%s</textarea>`, name, path.Base(name), name, string(bytes))), nil
-
-	/*
-		b := new(bytes.Buffer)
-		if err := sliceTemplate.Execute(b, map[string]interface{}{
-			"displayName":   name,
-			"sanitizedName": template.JS(strings.Replace(strings.Replace(name, "[", "_", -1), "]", "_", -1)),
-			"values":        v.Interface(),
-		}); err != nil {
-			return nil, err
-		}
-
-		return b.Bytes(), nil
-	*/
-}
-
-func encodeString(name, quote string) []byte {
-	return []byte(fmt.Sprintf(`<label for="%s">%s</label><input name="%s" type="text" value="%s" />`, name, path.Base(name), name, quote))
 }
 
 func marshalStruct(namespace string, s reflect.Value) ([]byte, error) {
@@ -266,17 +165,7 @@ func marshalStruct(namespace string, s reflect.Value) ([]byte, error) {
 }
 
 func marshalField(namespace string, s reflect.Value, f reflect.StructField) ([]byte, error) {
-	return marshalValue(prepend(namespace, f.Name), s.FieldByIndex(f.Index))
-}
-
-func prepend(prefix, name string) string {
-	if prefix == "" {
-		return name
-	}
-	if name == "" {
-		return prefix
-	}
-	return fmt.Sprintf("%s/%s", prefix, name)
+	return marshalValue(path.Join(namespace, f.Name), s.FieldByIndex(f.Index))
 }
 
 func Unmarshal(form url.Values, i interface{}) error {
