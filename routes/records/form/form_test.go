@@ -218,6 +218,32 @@ func TestMarshal(t *testing.T) {
 			},
 			output: `<fieldset><legend>nested_structure</legend><fieldset><legend>s</legend><label for="nested_structure/s/i">i</label><input name="nested_structure/s/i" type="number" value="5" /><br></fieldset><br></fieldset>`,
 		},
+
+		// Form struct
+		{
+			name: "form_struct",
+			structure: &form.Form{
+				Action: "/action/",
+				Method: "post",
+			},
+			output: `<form action="/action/" method="post"></form>`,
+		},
+		{
+			name: "form_struct/with_value",
+			structure: &form.Form{
+				Action: "/action/",
+				Method: "post",
+				Value: struct {
+					foo string
+					bar int
+				}{
+					foo: "foo",
+					bar: 8,
+				},
+				Name: "Structure",
+			},
+			output: `<form action="/action/" method="post" name="Structure"><fieldset><legend>Structure</legend><label for="Structure/foo">foo</label><input name="Structure/foo" type="text" value="foo" /><br><label for="Structure/bar">bar</label><input name="Structure/bar" type="number" value="8" /><br></fieldset></form>`,
+		},
 	}
 
 	for _, c := range cases {

@@ -28,6 +28,11 @@ type (
 
 // Marshal marshals a Go type into an HTML5 form.
 func Marshal(i interface{}, namespace string) ([]byte, error) {
+	// Protect against an immediate nil.
+	if i == nil {
+		return nil, nil
+	}
+
 	// We are asserting on the interface at a semantic level.
 	if fe, ok := i.(FormMarshaler); ok {
 		return fe.FormMarshal(namespace)
