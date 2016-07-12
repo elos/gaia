@@ -90,8 +90,16 @@ func marshalValue(namespace string, v reflect.Value) ([]byte, error) {
 
 	// Indirects
 	case reflect.Ptr:
+		if v.IsNil() {
+			return nil, nil
+		}
+
 		return marshalValue(namespace, reflect.Indirect(v))
 	case reflect.Interface:
+		if v.IsNil() {
+			return nil, nil
+		}
+
 		i := v.Interface()
 		if fe, ok := i.(FormMarshaler); ok {
 			return fe.FormMarshal(namespace)
@@ -158,8 +166,10 @@ func marshalStruct(namespace string, s reflect.Value) ([]byte, error) {
 		if _, err := b.Write(bytes); err != nil {
 			return nil, err
 		}
-		if _, err := b.WriteString("<br>"); err != nil {
-			return nil, err
+		if len(bytes) != 0 {
+			if _, err := b.WriteString("<br>"); err != nil {
+				return nil, err
+			}
 		}
 	}
 	_, err = b.WriteString("</fieldset>")

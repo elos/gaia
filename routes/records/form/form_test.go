@@ -244,6 +244,26 @@ func TestMarshal(t *testing.T) {
 			},
 			output: `<form action="/action/" method="post" name="Structure"><fieldset><legend>Structure</legend><label for="Structure/foo">foo</label><input name="Structure/foo" type="text" value="foo" /><br><label for="Structure/bar">bar</label><input name="Structure/bar" type="number" value="8" /><br></fieldset></form>`,
 		},
+		{
+			name: "nil_pointer",
+			structure: struct {
+				s *struct {
+					val string
+				}
+			}{
+				s: nil,
+			},
+			output: `<fieldset><legend>nil_pointer</legend></fieldset>`,
+		},
+		{
+			name: "nil_interface",
+			structure: struct {
+				val interface{}
+			}{
+				val: nil,
+			},
+			output: `<fieldset><legend>nil_interface</legend></fieldset>`,
+		},
 	}
 
 	for _, c := range cases {
