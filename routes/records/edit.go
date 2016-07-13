@@ -3,11 +3,12 @@ package records
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"net/http"
 
 	"github.com/elos/data"
-	"github.com/elos/data/transfer"
+	"github.com/elos/gaia/routes/records/form"
 	"github.com/elos/gaia/services"
 	"github.com/elos/models"
 	"github.com/elos/models/access"
@@ -21,10 +22,6 @@ const (
 
 func EditGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
 	l := logger.WithPrefix("RecordsEditGET: ")
-
-	cd := &CreateData{
-		JSON: make(map[string]interface{}),
-	}
 
 	// Parse the form value
 	if err := r.ParseForm(); err != nil {
@@ -124,9 +121,16 @@ func EditGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db dat
 		return
 	}
 
-	cd.Model = models.Metis[kind]
-	transfer.TransferAttrs(m, &cd.JSON)
-	if err := CreateTemplate.Execute(w, cd); err != nil {
+	b, err := form.Marshal(m, string(kind))
+	if err != nil {
+		l.Printf("form.Marshal error: %v", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	if err := CreateTemplate.Execute(w, &CreateData{
+		FormHTML: template.HTML(string(b)),
+	}); err != nil {
 		l.Fatal(err)
 	}
 }

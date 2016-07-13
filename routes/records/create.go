@@ -1,15 +1,13 @@
 package records
 
 import (
-	"encoding/json"
 	"fmt"
 	"html/template"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/elos/data"
+	"github.com/elos/gaia/routes/records/form"
 	"github.com/elos/gaia/services"
-	"github.com/elos/metis"
 	"github.com/elos/models"
 	"github.com/elos/models/access"
 	"github.com/elos/models/user"
@@ -19,496 +17,15 @@ import (
 const createTemplateRaw = `
 <html>
 	<body>
-		{{with .Flash}}
-			{{.}}
-		{{end}}
+		{{ with .Flash }}
+			{{ . }}
+		{{ end }}
 
-		{{$model := .Model}}
-		{{$json := .JSON}}
-		<form enctype="application/json" method="post" action="/records/create/">
-			<fieldset>
-				<legend>Traits</legend>
-				{{range $traitName, $trait := $model.Traits}}
-					{{if eq $trait.Type 0 }}{{/* Boolean */}}
-						<label> {{$trait.Name}} </label>
-						<input type="checkbox" name="trait-{{$trait.Name}}" value="{{index $json $traitName}}">
-					{{else if eq $trait.Type 1}}{{/* Integer */}}
-						<label> {{$trait.Name}} </label>
-						<input type="number" name="trait-{{$trait.Name}}" value="{{index $json $traitName}}">
-					{{else if eq $trait.Type 2}}{{/* Float */}}
-						<label> {{$trait.Name}} </label>
-						<input type="number" name="trait-{{$trait.Name}}" value="{{index $json $traitName}}">
-					{{else if eq $trait.Type 3}}{{/* String */}}
-						<label> {{$trait.Name}} </label>
-						<input type="text" name="trait-{{$trait.Name}}" value="{{index $json $traitName}}">
-					{{else if eq $trait.Type 4}}{{/* DateTime */}}
-						<label> {{$trait.Name}} </label>
-						<input type="datetime-local" name="trait-{{$trait.Name}}" value="{{index $json $traitName}}">
-					{{else if eq $trait.Type 5}}{{/* BooleanList */}}
-						<fieldset id="{{$traitName}}FieldSet">
-							<legend> {{$trait.Name}} </legend>
-							{{$values := index $json $traitName}}
-							<table>
-							<tbody id="{{$traitName}}-tbody">
-							{{range $i, $value := $values}}
-							<tr id="{{$traitName}}-{{$i}}">
-								<td>
-									<input type="checkbox" name="trait-{{$trait.Name}}" value="{{$value}}">
-								</td>
-								<td>
-									<button type="button"  onclick="remove{{castJS $traitName}}(id{{castJS $traitName}}(i))">x</button>
-								</td>
-							</tr>
-							{{end}}
-							</tbody>
-							</table>
-							<button id="{{$traitName}}Adder" onclick="add{{castJS $traitName}}()" type="button"> + {{$traitName}} </button>
-							<script>
-							{{with $values}}
-								var num{{castJS $traitName}} = {{ len . }};
-							{{else}}
-								var num{{castJS $traitName}} = 0;
-							{{end}}
-							var {{castJS $traitName}}AdderButton = document.getElementById("{{$traitName}}Adder");
-
-							function id{{castJS $traitName}}(i /*int*/) {
-								return "{{$traitName}}-" + i;
-							}
-
-							function add{{castJS $traitName}}() {
-								var input = document.createElement("input");
-								input.name = "trait-{{$traitName}}";
-								input.type = "checkbox";
-
-								var x = document.createElement("button");
-								x.type = "button";
-								x.innerHTML = "x";
-								x.setAttribute("onclick", "remove{{castJS $traitName}}(id{{castJS $traitName}}(" + num{{castJS $traitName}} + "))");
-
-								var row = document.createElement('tr');
-								row.id = id{{castJS $traitName}}(num{{castJS $traitName}});
-								row.appendChild(document.createElement('td'))
-								row.appendChild(document.createElement('td'))
-								row.children[0].appendChild(input);
-								row.children[1].appendChild(x);
-
-								document.getElementById("{{$traitName}}-tbody").appendChild(row);
-
-								num{{castJS $traitName}}++;
-							}
-
-							function remove{{castJS $traitName}}(remID /*string*/) {
-								var rows = [];
-								for (var i = 0; i < num{{castJS $traitName}}; i++) {
-									var id = id{{castJS $traitName}}(i);
-									if (id === remID) {
-										document.getElementById(id).remove();
-									} else {
-										rows.push(document.getElementById(id));
-									}
-								}
-
-								for (var i = 0; i < rows.length; i++) {
-									rows[i].setAttribute("id", id{{castJS $traitName}}(i));
-									rows[i].children[1].children[0].setAttribute("onclick", "remove{{castJS $traitName}}(id{{castJS $traitName}}("+i+"))");
-								}
-
-								num{{castJS $traitName}}--;
-							}
-							</script>
-						</fieldset>
-					{{else if eq $trait.Type 6}}{{/* IntegerList */}}
-						<fieldset id="{{$traitName}}FieldSet">
-							<legend> {{$trait.Name}} </legend>
-							{{$values := index $json $traitName}}
-							<table>
-							<tbody id="{{$traitName}}-tbody">
-							{{range $i, $value := $values}}
-							<tr id="{{$traitName}}-{{$i}}">
-								<td>
-									<input type="number" name="trait-{{$trait.Name}}" value="{{$value}}">
-								</td>
-								<td>
-									<button type="button"  onclick="remove{{castJS $traitName}}(id{{castJS $traitName}}(i))">x</button>
-								</td>
-							</tr>
-							{{end}}
-							</tbody>
-							</table>
-							<button id="{{$traitName}}Adder" onclick="add{{castJS $traitName}}()" type="button"> + {{$traitName}} </button>
-							<script>
-							{{with $values}}
-								var num{{castJS $traitName}} = {{ len . }};
-							{{else}}
-								var num{{castJS $traitName}} = 0;
-							{{end}}
-							var {{castJS $traitName}}AdderButton = document.getElementById("{{$traitName}}Adder");
-
-							function id{{castJS $traitName}}(i /*int*/) {
-								return "{{$traitName}}-" + i;
-							}
-
-							function add{{castJS $traitName}}() {
-								var input = document.createElement("input");
-								input.name = "trait-{{$traitName}}";
-								input.type = "number";
-
-								var x = document.createElement("button");
-								x.type = "button";
-								x.innerHTML = "x";
-								x.setAttribute("onclick", "remove{{castJS $traitName}}(id{{castJS $traitName}}(" + num{{castJS $traitName}} + "))");
-
-								var row = document.createElement('tr');
-								row.id = id{{castJS $traitName}}(num{{castJS $traitName}});
-								row.appendChild(document.createElement('td'))
-								row.appendChild(document.createElement('td'))
-								row.children[0].appendChild(input);
-								row.children[1].appendChild(x);
-
-								document.getElementById("{{$traitName}}-tbody").appendChild(row);
-
-								num{{castJS $traitName}}++;
-							}
-
-							function remove{{castJS $traitName}}(remID /*string*/) {
-								var rows = [];
-								for (var i = 0; i < num{{castJS $traitName}}; i++) {
-									var id = id{{castJS $traitName}}(i);
-									if (id === remID) {
-										document.getElementById(id).remove();
-									} else {
-										rows.push(document.getElementById(id));
-									}
-								}
-
-								for (var i = 0; i < rows.length; i++) {
-									rows[i].setAttribute("id", id{{castJS $traitName}}(i));
-									rows[i].children[1].children[0].setAttribute("onclick", "remove{{castJS $traitName}}(id{{castJS $traitName}}("+i+"))");
-								}
-
-								num{{castJS $traitName}}--;
-							}
-							</script>
-						</fieldset>
-					{{else if eq $trait.Type 7}}{{/* StringList */}}
-						<fieldset id="{{$traitName}}FieldSet">
-							<legend> {{$trait.Name}} </legend>
-							{{$values := index $json $traitName}}
-							<table>
-							<tbody id="{{$traitName}}-tbody">
-							{{range $i, $value := $values}}
-							<tr id="{{$traitName}}-{{$i}}">
-								<td>
-									<input type="text" name="trait-{{$trait.Name}}" value="{{$value}}">
-								</td>
-								<td>
-									<button type="button"  onclick="remove{{castJS $traitName}}(id{{castJS $traitName}}(i))">x</button>
-								</td>
-							</tr>
-							{{end}}
-							</tbody>
-							</table>
-							<button id="{{$traitName}}Adder" onclick="add{{castJS $traitName}}()" type="button"> + {{$traitName}} </button>
-							<script>
-							{{with $values}}
-								var num{{castJS $traitName}} = {{ len . }};
-							{{else}}
-								var num{{castJS $traitName}} = 0;
-							{{end}}
-							var {{castJS $traitName}}AdderButton = document.getElementById("{{$traitName}}Adder");
-
-							function id{{castJS $traitName}}(i /*int*/) {
-								return "{{$traitName}}-" + i;
-							}
-
-							function add{{castJS $traitName}}() {
-								var input = document.createElement("input");
-								input.name = "trait-{{$traitName}}";
-								input.type = "text";
-
-								var x = document.createElement("button");
-								x.type = "button";
-								x.innerHTML = "x";
-								x.setAttribute("onclick", "remove{{castJS $traitName}}(id{{castJS $traitName}}(" + num{{castJS $traitName}} + "))");
-
-								var row = document.createElement('tr');
-								row.id = id{{castJS $traitName}}(num{{castJS $traitName}});
-								row.appendChild(document.createElement('td'))
-								row.appendChild(document.createElement('td'))
-								row.children[0].appendChild(input);
-								row.children[1].appendChild(x);
-
-								document.getElementById("{{$traitName}}-tbody").appendChild(row);
-
-								num{{castJS $traitName}}++;
-							}
-
-							function remove{{castJS $traitName}}(remID /*string*/) {
-								var rows = [];
-								for (var i = 0; i < num{{castJS $traitName}}; i++) {
-									var id = id{{castJS $traitName}}(i);
-									if (id === remID) {
-										document.getElementById(id).remove();
-									} else {
-										rows.push(document.getElementById(id));
-									}
-								}
-
-								for (var i = 0; i < rows.length; i++) {
-									rows[i].setAttribute("id", id{{castJS $traitName}}(i));
-									rows[i].children[1].children[0].setAttribute("onclick", "remove{{castJS $traitName}}(id{{castJS $traitName}}("+i+"))");
-								}
-
-								num{{castJS $traitName}}--;
-							}
-							</script>
-						</fieldset>
-					{{else if eq $trait.Type 8}}{{/* DateTimeList */}}
-						<fieldset id="{{$traitName}}FieldSet">
-							<legend> {{$trait.Name}} </legend>
-							{{$values := index $json $traitName}}
-							<table>
-							<tbody id="{{$traitName}}-tbody">
-							{{range $i, $value := $values}}
-							<tr id="{{$traitName}}-{{$i}}">
-								<td>
-									<input type="datetime-local" name="trait-{{$trait.Name}}" value="{{$value}}">
-								</td>
-								<td>
-									<button type="button"  onclick="remove{{castJS $traitName}}(id{{castJS $traitName}}(i))">x</button>
-								</td>
-							</tr>
-							{{end}}
-							</tbody>
-							</table>
-							<button id="{{$traitName}}Adder" onclick="add{{castJS $traitName}}()" type="button"> + {{$traitName}} </button>
-							<script>
-							{{with $values}}
-								var num{{castJS $traitName}} = {{ len . }};
-							{{else}}
-								var num{{castJS $traitName}} = 0;
-							{{end}}
-							var {{castJS $traitName}}AdderButton = document.getElementById("{{$traitName}}Adder");
-
-							function id{{castJS $traitName}}(i /*int*/) {
-								return "{{$traitName}}-" + i;
-							}
-
-							function add{{castJS $traitName}}() {
-								var input = document.createElement("input");
-								input.name = "trait-{{$traitName}}";
-								input.type = "datetime-local";
-
-								var x = document.createElement("button");
-								x.type = "button";
-								x.innerHTML = "x";
-								x.setAttribute("onclick", "remove{{castJS $traitName}}(id{{castJS $traitName}}(" + num{{castJS $traitName}} + "))");
-
-								var row = document.createElement('tr');
-								row.id = id{{castJS $traitName}}(num{{castJS $traitName}});
-								row.appendChild(document.createElement('td'))
-								row.appendChild(document.createElement('td'))
-								row.children[0].appendChild(input);
-								row.children[1].appendChild(x);
-
-								document.getElementById("{{$traitName}}-tbody").appendChild(row);
-
-								num{{castJS $traitName}}++;
-							}
-
-							function remove{{castJS $traitName}}(remID /*string*/) {
-								var rows = [];
-								for (var i = 0; i < num{{castJS $traitName}}; i++) {
-									var id = id{{castJS $traitName}}(i);
-									if (id === remID) {
-										document.getElementById(id).remove();
-									} else {
-										rows.push(document.getElementById(id));
-									}
-								}
-
-								for (var i = 0; i < rows.length; i++) {
-									rows[i].setAttribute("id", id{{castJS $traitName}}(i));
-									rows[i].children[1].children[0].setAttribute("onclick", "remove{{castJS $traitName}}(id{{castJS $traitName}}("+i+"))");
-								}
-
-								num{{castJS $traitName}}--;
-							}
-							</script>
-						</fieldset>
-					{{else if eq $trait.Type 9}}{{/* ID */}}
-						<label> {{$trait.Name}} </label>
-						<input type="text" name="trait-{{$trait.Name}}" disabled>
-						<input style="{display:none}" type="text" name="trait-{{$trait.Name}}">
-					{{else if eq $trait.Type 10}}{{/* IDList */}}
-						<fieldset id="{{$traitName}}FieldSet">
-							<legend> {{$trait.Name}} </legend>
-							{{$values := index $json $traitName}}
-							<table>
-							<tbody id="{{$traitName}}-tbody">
-							{{range $i, $value := $values}}
-							<tr id="{{$traitName}}-{{$i}}">
-								<td>
-									<input type="text" name="trait-{{$trait.Name}}" value="{{$value}}">
-								</td>
-								<td>
-									<button type="button"  onclick="remove{{castJS $traitName}}(id{{castJS $traitName}}(i))">x</button>
-								</td>
-							</tr>
-							{{end}}
-							</tbody>
-							</table>
-							<button id="{{$traitName}}Adder" onclick="add{{castJS $traitName}}()" type="button"> + {{$traitName}} </button>
-							<script>
-							{{with $values}}
-								var num{{castJS $traitName}} = {{ len . }};
-							{{else}}
-								var num{{castJS $traitName}} = 0;
-							{{end}}
-							var {{castJS $traitName}}AdderButton = document.getElementById("{{$traitName}}Adder");
-
-							function id{{castJS $traitName}}(i /*int*/) {
-								return "{{$traitName}}-" + i;
-							}
-
-							function add{{castJS $traitName}}() {
-								var input = document.createElement("input");
-								input.name = "trait-{{$traitName}}";
-								input.type = "text";
-
-								var x = document.createElement("button");
-								x.type = "button";
-								x.innerHTML = "x";
-								x.setAttribute("onclick", "remove{{castJS $traitName}}(id{{castJS $traitName}}(" + num{{castJS $traitName}} + "))");
-
-								var row = document.createElement('tr');
-								row.id = id{{castJS $traitName}}(num{{castJS $traitName}});
-								row.appendChild(document.createElement('td'))
-								row.appendChild(document.createElement('td'))
-								row.children[0].appendChild(input);
-								row.children[1].appendChild(x);
-
-								document.getElementById("{{$traitName}}-tbody").appendChild(row);
-
-								num{{castJS $traitName}}++;
-							}
-
-							function remove{{castJS $traitName}}(remID /*string*/) {
-								var rows = [];
-								for (var i = 0; i < num{{castJS $traitName}}; i++) {
-									var id = id{{castJS $traitName}}(i);
-									if (id === remID) {
-										document.getElementById(id).remove();
-									} else {
-										rows.push(document.getElementById(id));
-									}
-								}
-
-								for (var i = 0; i < rows.length; i++) {
-									rows[i].setAttribute("id", id{{castJS $traitName}}(i));
-									rows[i].children[1].children[0].setAttribute("onclick", "remove{{castJS $traitName}}(id{{castJS $traitName}}("+i+"))");
-								}
-
-								num{{castJS $traitName}}--;
-							}
-							</script>
-						</fieldset>
-					{{else if eq $trait.Type 13}}{{/* JSON */}}
-						<label> {{$trait.Name}} </label>
-						<input type="text" name="trait-{{$trait.Name}}">
-					{{else}}
-						Unrecognized primitive
-					{{end}}
-					<br />
-				{{else}}
-					No traits for this model.
-				{{end}}
-			</fieldset>
-			<fieldset>
-				<legend>Relations</legend>
-				{{range $relationName, $relation := $model.Relations}}
-					{{if eq $relation.Multiplicity 0}}{{/* Mul */}}
-						<fieldset id="{{$relationName}}FieldSet">
-							<legend> {{$relation.Name}} </legend>
-							{{$values := index $json $relationName}}
-							<table>
-							<tbody id="{{$relationName}}-tbody">
-							{{range $i, $value := $values}}
-							<tr id="{{$relationName}}-{{$i}}">
-								<td>
-									<input type="text" name="relation-{{$relation.Name}}-id" value="{{$value}}">
-								</td>
-								<td>
-									<button type="button"  onclick="remove{{castJS $relationName}}(id{{castJS $relationName}}(i))">x</button>
-								</td>
-							</tr>
-							{{end}}
-							</tbody>
-							</table>
-							<button id="{{$relationName}}Adder" onclick="add{{castJS $relationName}}()" type="button"> + {{$relationName}} </button>
-							<script>
-							{{with $values}}
-								var num{{castJS $relationName}} = {{ len . }};
-							{{else}}
-								var num{{castJS $relationName}} = 0;
-							{{end}}
-							var {{castJS $relationName}}AdderButton = document.getElementById("{{$relationName}}Adder");
-
-							function id{{castJS $relationName}}(i /*int*/) {
-								return "{{$relationName}}-" + i;
-							}
-
-							function add{{castJS $relationName}}() {
-								var input = document.createElement("input");
-								input.name = "relation-{{$relationName}}-id";
-								input.type = "text";
-
-								var x = document.createElement("button");
-								x.type = "button";
-								x.innerHTML = "x";
-								x.setAttribute("onclick", "remove{{castJS $relationName}}(id{{castJS $relationName}}(" + num{{castJS $relationName}} + "))");
-
-								var row = document.createElement('tr');
-								row.id = id{{castJS $relationName}}(num{{castJS $relationName}});
-								row.appendChild(document.createElement('td'))
-								row.appendChild(document.createElement('td'))
-								row.children[0].appendChild(input);
-								row.children[1].appendChild(x);
-
-								document.getElementById("{{$relationName}}-tbody").appendChild(row);
-
-								num{{castJS $relationName}}++;
-							}
-
-							function remove{{castJS $relationName}}(remID /*string*/) {
-								var rows = [];
-								for (var i = 0; i < num{{castJS $relationName}}; i++) {
-									var id = id{{castJS $relationName}}(i);
-									if (id === remID) {
-										document.getElementById(id).remove();
-									} else {
-										rows.push(document.getElementById(id));
-									}
-								}
-
-								for (var i = 0; i < rows.length; i++) {
-									rows[i].setAttribute("id", id{{castJS $relationName}}(i));
-									rows[i].children[1].children[0].setAttribute("onclick", "remove{{castJS $relationName}}(id{{castJS $relationName}}("+i+"))");
-								}
-
-								num{{castJS $relationName}}--;
-							}
-							</script>
-						</fieldset>
-					{{else if eq $relation.Multiplicity 1}}{{/* One */}}
-						<label> {{$relation.Name}} </label>
-						<input type="text" name="relation-{{$relation.Name}}-id" value="{{printf "%s%s" $relationName "_id" | index $json }}">
-					{{end}}
-				{{else}}
-					No relations.
-				{{end}}
-			</fieldset>
-			<input type="submit" value="Save" />
+		<form method="post">
+		{{ with .FormHTML }}
+			{{ . }}
+		{{ end }}
+			<input type="submit" value="Create">
 		</form>
 	</body>
 </html>
@@ -523,9 +40,8 @@ var CreateTemplate = template.Must(
 )
 
 type CreateData struct {
-	Flash string
-	Model *metis.Model
-	JSON  map[string]interface{}
+	Flash    string
+	FormHTML template.HTML
 }
 
 // CreateGET handles a `GET` request to the `/records/create/` route of the records web UI.
@@ -565,13 +81,20 @@ func CreateGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db d
 		return
 	}
 
-	ed := &CreateData{
-		Flash: "The record has not yet been created, you must save",
-		Model: models.Metis[kind],
-		JSON:  make(map[string]interface{}),
+	m := models.ModelFor(kind)
+	b, err := form.Marshal(m, string(kind))
+	if err != nil {
+		l.Printf("form.Marshal error: %v", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
 	}
 
-	if err := CreateTemplate.Execute(w, ed); err != nil {
+	cd := &CreateData{
+		Flash:    "The record has not yet been created, you must save",
+		FormHTML: template.HTML(string(b)),
+	}
+
+	if err := CreateTemplate.Execute(w, cd); err != nil {
 		l.Fatalf("CreateTemplate.Execute error: %v", err)
 	}
 }
@@ -619,21 +142,9 @@ func CreatePOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db 
 
 	m := models.ModelFor(kind)
 
-	var requestBody []byte
-	var err error
-
-	// Now we must read the body of the request
-	defer r.Body.Close() // don't forget to close it
-	if requestBody, err = ioutil.ReadAll(r.Body); err != nil {
-		l.Printf("error while reading request body: %s", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	// Now we unmarshal that into the record
-	if err = json.Unmarshal(requestBody, m); err != nil {
-		l.Printf("info: request body:\n%s", string(requestBody))
-		l.Printf("error: while unmarshalling request body, %s", err)
+	if err := form.Unmarshal(r.Form, m, string(kind)); err != nil {
+		l.Printf("info: r.Form :\n%v", r.Form)
+		l.Printf("error: while unmarshalling form, %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
