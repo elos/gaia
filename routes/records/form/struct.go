@@ -18,7 +18,7 @@ type Form struct {
 	Value interface{}
 }
 
-func (f *Form) FormMarshal(namespace string) ([]byte, error) {
+func (f *Form) MarshalForm(namespace string) ([]byte, error) {
 	b := new(bytes.Buffer)
 
 	b.WriteString("<form")

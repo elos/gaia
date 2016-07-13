@@ -1,6 +1,8 @@
 package form_test
 
 import (
+	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +12,7 @@ import (
 	"github.com/elos/models/user"
 )
 
+// --- TestMarshal {{{
 func TestMarshal(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -163,60 +166,69 @@ func TestMarshal(t *testing.T) {
 		{
 			name: "bool_field_true",
 			structure: struct {
-				b bool
+				B bool
 			}{
-				b: true,
+				B: true,
 			},
-			output: `<fieldset><legend>bool_field_true</legend><label for="bool_field_true/b">b</label><input name="bool_field_true/b" type="checkbox" checked/><br></fieldset>`,
+			output: `<fieldset><legend>bool_field_true</legend><label for="bool_field_true/B">B</label><input name="bool_field_true/B" type="checkbox" checked/><br></fieldset>`,
 		},
 		{
 			name: "bool_field_false",
 			structure: struct {
-				b bool
+				B bool
 			}{
-				b: false,
+				B: false,
 			},
-			output: `<fieldset><legend>bool_field_false</legend><label for="bool_field_false/b">b</label><input name="bool_field_false/b" type="checkbox" /><br></fieldset>`,
+			output: `<fieldset><legend>bool_field_false</legend><label for="bool_field_false/B">B</label><input name="bool_field_false/B" type="checkbox" /><br></fieldset>`,
 		},
 		{
 			name: "integer_field",
 			structure: struct {
-				i int
+				I int
 			}{
-				i: 45,
+				I: 45,
 			},
-			output: `<fieldset><legend>integer_field</legend><label for="integer_field/i">i</label><input name="integer_field/i" type="number" value="45" /><br></fieldset>`,
+			output: `<fieldset><legend>integer_field</legend><label for="integer_field/I">I</label><input name="integer_field/I" type="number" value="45" /><br></fieldset>`,
 		},
 		{
 			name: "float_field",
 			structure: struct {
-				f float64
+				F float64
 			}{
-				f: 54.3,
+				F: 54.3,
 			},
-			output: `<fieldset><legend>float_field</legend><label for="float_field/f">f</label><input name="float_field/f" type="number" value="54.300000" /><br></fieldset>`,
+			output: `<fieldset><legend>float_field</legend><label for="float_field/F">F</label><input name="float_field/F" type="number" value="54.300000" /><br></fieldset>`,
 		},
 		{
 			name: "string_field",
 			structure: struct {
-				s string
+				S string
 			}{
-				s: "foo bar",
+				S: "foo bar",
 			},
-			output: `<fieldset><legend>string_field</legend><label for="string_field/s">s</label><input name="string_field/s" type="text" value="foo bar" /><br></fieldset>`,
+			output: `<fieldset><legend>string_field</legend><label for="string_field/S">S</label><input name="string_field/S" type="text" value="foo bar" /><br></fieldset>`,
 		},
 		{
 			name: "nested_structure",
 			structure: struct {
-				s struct {
-					i int
+				S struct {
+					I int
 				}
 			}{
-				s: struct{ i int }{
-					i: 5,
+				S: struct{ I int }{
+					I: 5,
 				},
 			},
-			output: `<fieldset><legend>nested_structure</legend><fieldset><legend>s</legend><label for="nested_structure/s/i">i</label><input name="nested_structure/s/i" type="number" value="5" /><br></fieldset><br></fieldset>`,
+			output: `<fieldset><legend>nested_structure</legend><fieldset><legend>S</legend><label for="nested_structure/S/I">I</label><input name="nested_structure/S/I" type="number" value="5" /><br></fieldset><br></fieldset>`,
+		},
+		{
+			name: "ignore_unexported",
+			structure: struct {
+				unexp int
+			}{
+				unexp: 5,
+			},
+			output: `<fieldset><legend>ignore_unexported</legend></fieldset>`,
 		},
 
 		// Form struct
@@ -234,33 +246,35 @@ func TestMarshal(t *testing.T) {
 				Action: "/action/",
 				Method: "post",
 				Value: struct {
-					foo string
-					bar int
+					Foo string
+					Bar int
 				}{
-					foo: "foo",
-					bar: 8,
+					Foo: "foo",
+					Bar: 8,
 				},
 				Name: "Structure",
 			},
-			output: `<form action="/action/" method="post" name="Structure"><fieldset><legend>Structure</legend><label for="Structure/foo">foo</label><input name="Structure/foo" type="text" value="foo" /><br><label for="Structure/bar">bar</label><input name="Structure/bar" type="number" value="8" /><br></fieldset></form>`,
+			output: `<form action="/action/" method="post" name="Structure"><fieldset><legend>Structure</legend><label for="Structure/Foo">Foo</label><input name="Structure/Foo" type="text" value="foo" /><br><label for="Structure/Bar">Bar</label><input name="Structure/Bar" type="number" value="8" /><br></fieldset></form>`,
 		},
+
+		// Nullity
 		{
 			name: "nil_pointer",
 			structure: struct {
-				s *struct {
+				S *struct {
 					val string
 				}
 			}{
-				s: nil,
+				S: nil,
 			},
 			output: `<fieldset><legend>nil_pointer</legend></fieldset>`,
 		},
 		{
 			name: "nil_interface",
 			structure: struct {
-				val interface{}
+				Val interface{}
 			}{
-				val: nil,
+				Val: nil,
 			},
 			output: `<fieldset><legend>nil_interface</legend></fieldset>`,
 		},
@@ -280,6 +294,8 @@ func TestMarshal(t *testing.T) {
 	}
 }
 
+// --- }}}
+
 func TestMarshalTask(t *testing.T) {
 	t.Skip()
 	db := mem.NewDB()
@@ -295,5 +311,244 @@ func TestMarshalTask(t *testing.T) {
 
 	if got, want := string(bytes), ""; got != want {
 		t.Fatalf("form.Marshal: got\n%s\nwant,\n%s", got, want)
+	}
+}
+
+func TestUnmarshal(t *testing.T) {
+	cases := []struct {
+		name   string
+		values url.Values
+		// into should always be a pointer
+		into interface{}
+		// want should always be the dereferenced type of into
+		want interface{}
+	}{
+		// Named
+		{
+			name: "time",
+			values: url.Values{
+				"time": []string{"2016-07-08T14:04"},
+			},
+			into: new(time.Time),
+			want: time.Date(2016, 7, 8, 14, 4, 0, 0, time.UTC),
+		},
+
+		// Primitives
+		{
+			name: "bool",
+			values: url.Values{
+				"bool": []string{"true"},
+			},
+			into: new(bool),
+			want: true,
+		},
+		{
+			name: "uint8",
+			values: url.Values{
+				"uint8": []string{"8"},
+			},
+			into: new(uint8),
+			want: uint8(8),
+		},
+		{
+			name: "uint16",
+			values: url.Values{
+				"uint16": []string{"16"},
+			},
+			into: new(uint16),
+			want: uint16(16),
+		},
+		{
+			name: "uint32",
+			values: url.Values{
+				"uint32": []string{"32"},
+			},
+			into: new(uint32),
+			want: uint32(32),
+		},
+		{
+			name: "uint",
+			values: url.Values{
+				"uint": []string{"54"},
+			},
+			into: new(uint),
+			want: uint(54),
+		},
+		{
+			name: "uint64",
+			values: url.Values{
+				"uint64": []string{"64"},
+			},
+			into: new(uint64),
+			want: uint64(64),
+		},
+		{
+			name: "int8",
+			values: url.Values{
+				"int8": []string{"-8"},
+			},
+			into: new(int8),
+			want: int8(-8),
+		},
+		{
+			name: "int16",
+			values: url.Values{
+				"int16": []string{"-16"},
+			},
+			into: new(int16),
+			want: int16(-16),
+		},
+		{
+			name: "int32",
+			values: url.Values{
+				"int32": []string{"-32"},
+			},
+			into: new(int32),
+			want: int32(-32),
+		},
+		{
+			name: "int",
+			values: url.Values{
+				"int": []string{"-54"},
+			},
+			into: new(int),
+			want: int(-54),
+		},
+		{
+			name: "int64",
+			values: url.Values{
+				"int64": []string{"-64"},
+			},
+			into: new(int64),
+			want: int64(-64),
+		},
+		{
+			name: "float32",
+			values: url.Values{
+				"float32": []string{"32.32"},
+			},
+			into: new(float32),
+			want: float32(32.32),
+		},
+		{
+			name: "float64",
+			values: url.Values{
+				"float64": []string{"-64.64"},
+			},
+			into: new(float64),
+			want: float64(-64.64),
+		},
+		{
+			name: "string",
+			values: url.Values{
+				"string": []string{"this is a string"},
+			},
+			into: new(string),
+			want: "this is a string",
+		},
+
+		// Composites
+		/*
+			{
+				name: "[]int",
+				values: url.Values{
+					"[]int": []string{"[1,2,3]"},
+				},
+				into: make([]int, 0),
+				want: []int{1, 2, 3},
+			},
+		*/
+		{
+			name: "map[string]int",
+			values: url.Values{
+				"map[string]int": []string{`{"foo": 1, "bar": 2}`},
+			},
+			into: make(map[string]int),
+			want: map[string]int{
+				"foo": 1,
+				"bar": 2,
+			},
+		},
+
+		// Structures
+		{
+			name: "struct/bool",
+			values: url.Values{
+				"struct/bool/B": []string{"true"},
+			},
+			into: new(struct {
+				B bool
+			}),
+			want: struct {
+				B bool
+			}{
+				B: true,
+			},
+		},
+		{
+			name: "struct/composite",
+			values: url.Values{
+				"struct/composite/Foo": []string{`["one", "two"]`},
+				"struct/composite/Bar": []string{`{"1": 1, "2": 2}`},
+			},
+			into: new(struct {
+				Foo []string
+				Bar map[string]int
+			}),
+			want: struct {
+				Foo []string
+				Bar map[string]int
+			}{
+				Foo: []string{"one", "two"},
+				Bar: map[string]int{
+					"1": 1,
+					"2": 2,
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Logf("Running: %s", c.name)
+
+		// Test case consistency
+		switch k := reflect.ValueOf(c.into).Kind(); k {
+		// Reference types
+		case reflect.Slice:
+			fallthrough
+		case reflect.Map:
+			if got, want := reflect.ValueOf(c.want).Type(), reflect.ValueOf(c.into).Type(); got != want {
+				t.Fatalf("reflect.ValueOf(c.want).Type(): got %v, want %v", got, want)
+			}
+		default:
+			if got, want := reflect.ValueOf(c.into).Kind(), reflect.Ptr; got != want {
+				t.Fatalf("reflect.ValueOf(c.into).Kind(): got %v, want %v", got, want)
+			}
+			if got, want := reflect.ValueOf(c.want).Type(), reflect.ValueOf(c.into).Elem().Type(); got != want {
+				t.Fatalf("reflect.ValueOf(c.want).Type(): got %v, want %v", got, want)
+			}
+		}
+
+		if err := form.Unmarshal(c.values, c.into, c.name); err != nil {
+			t.Fatalf("form.Unmarshal error: %v", err)
+		}
+
+		switch k := reflect.ValueOf(c.into).Kind(); k {
+		// Reference types
+		case reflect.Slice:
+			fallthrough
+		case reflect.Map:
+			if got, want := reflect.DeepEqual(c.into, c.want), true; got != want {
+				t.Logf("\tc.into: %v", c.into)
+				t.Logf("\tc.want: %v", c.want)
+				t.Errorf("\treflect.DeepEqual(c.into, c.want): got: %t, want %t", got, want)
+			}
+		default:
+			if got, want := reflect.DeepEqual(reflect.ValueOf(c.into).Elem().Interface(), c.want), true; got != want {
+				t.Logf("\tc.into: %v", reflect.ValueOf(c.into).Elem().Interface())
+				t.Logf("\tc.want: %v", c.want)
+				t.Errorf("\treflect.DeepEqual(reflect.ValueOf(c.into).Elem().Interface(), c.want): got: %t, want %t", got, want)
+			}
+		}
 	}
 }

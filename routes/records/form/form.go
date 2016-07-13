@@ -7,24 +7,27 @@ import (
 	"net/url"
 	"path"
 	"reflect"
+	"strconv"
 	"time"
 )
 
 type (
-	// FormMarshaler overrides the default implementation of marshalling a go type
+	// Marshaler overrides the default implementation of marshalling a go type
 	// into an HTML5 form. The parameterization of the namespace must be respected
 	// in HTML element naming as well as in field naming.
-	FormMarshaler interface {
-		FormMarshal(namespace string) ([]byte, error)
+	Marshaler interface {
+		MarshalForm(namespace string) ([]byte, error)
 	}
 
-	// FormUnmarshaler overrides the default implementation of unmarshalling a go type
+	// Unmarshaler overrides the default implementation of unmarshalling a go type
 	// from url.Values of a HTML form. The parametrization namespace is symetric and
 	// guaranteed to be the same as that given during marshalling.
-	FormUnmarshaler interface {
-		FormUnmarshal(namespace string, values url.Values) error
+	Unmarshaler interface {
+		UnmarshalForm(values url.Values, namespace string) error
 	}
 )
+
+// --- Marshal {{{
 
 // Marshal marshals a Go type into an HTML5 form.
 func Marshal(i interface{}, namespace string) ([]byte, error) {
@@ -34,8 +37,8 @@ func Marshal(i interface{}, namespace string) ([]byte, error) {
 	}
 
 	// We are asserting on the interface at a semantic level.
-	if fe, ok := i.(FormMarshaler); ok {
-		return fe.FormMarshal(namespace)
+	if fe, ok := i.(Marshaler); ok {
+		return fe.MarshalForm(namespace)
 	}
 
 	return marshalValue(namespace, reflect.ValueOf(i))
@@ -101,8 +104,8 @@ func marshalValue(namespace string, v reflect.Value) ([]byte, error) {
 		}
 
 		i := v.Interface()
-		if fe, ok := i.(FormMarshaler); ok {
-			return fe.FormMarshal(namespace)
+		if fe, ok := i.(Marshaler); ok {
+			return fe.MarshalForm(namespace)
 		}
 
 		return marshalValue(namespace, reflect.ValueOf(i))
@@ -180,40 +183,354 @@ func marshalStruct(namespace string, s reflect.Value) ([]byte, error) {
 }
 
 func marshalField(namespace string, s reflect.Value, f reflect.StructField) ([]byte, error) {
-	return marshalValue(path.Join(namespace, f.Name), s.FieldByIndex(f.Index))
+	switch field := s.FieldByIndex(f.Index); f.PkgPath {
+	case "": // exported
+		return marshalValue(path.Join(namespace, f.Name), field)
+	default: // unexported
+		return nil, nil
+	}
 }
 
-func Unmarshal(form url.Values, i interface{}) error {
-	return nil
+// --- }}}
+
+func Unmarshal(form url.Values, i interface{}, namespace string) error {
+	// Protect against an immediate nil.
+	if i == nil {
+		return nil
+	}
+
+	// We are asserting on the interface at a semantic level.
+	if fe, ok := i.(Unmarshaler); ok {
+		return fe.UnmarshalForm(form, namespace)
+	}
+
+	switch v := reflect.ValueOf(i); v.Kind() {
+	default:
+		if v := reflect.ValueOf(i); v.Kind() != reflect.Ptr {
+			return fmt.Errorf("should be a pointer value")
+		}
+
+	// Composite types
+	// case reflect.Slice: doesn't work
+	case reflect.Map:
+	}
+
+	return unmarshalValue(form, reflect.ValueOf(i), namespace)
 }
 
-func unmarshalValue(name string, v reflect.Value) ([]byte, error) {
+func CantSet(v reflect.Value) error {
+	return fmt.Errorf("can not set value: %v", v)
+}
+
+func unmarshalValue(form url.Values, v reflect.Value, namespace string) error {
 	if v.Type().Name() == "Time" {
-		//return decodeTime(name, v.Interface().(time.Time)), nil
+		switch v.CanSet() {
+		case false:
+			return CantSet(v)
+		default:
+			switch param := form.Get(namespace); param {
+			case "":
+				return nil
+			default:
+				return decodeTime(param, v)
+			}
+		}
 	}
 
 	switch v.Kind() {
+
+	// Primitives
 	case reflect.Bool:
-		return encodeBool(name, v.Bool()), nil
+		switch v.CanSet() {
+		case false:
+			return CantSet(v)
+		default:
+			switch param := form.Get(namespace); param {
+			case "":
+				return nil
+			default:
+				return decodeBool(param, v)
+			}
+		}
+	case reflect.Uint8:
+		switch v.CanSet() {
+		case false:
+			return CantSet(v)
+		default:
+			switch param := form.Get(namespace); param {
+			case "":
+				return nil
+			default:
+				return decodeUint(param, v, 8)
+			}
+		}
+	case reflect.Uint16:
+		switch v.CanSet() {
+		case false:
+			return CantSet(v)
+		default:
+			switch param := form.Get(namespace); param {
+			case "":
+				return nil
+			default:
+				return decodeUint(param, v, 16)
+			}
+		}
+	case reflect.Uint32:
+		switch v.CanSet() {
+		case false:
+			return CantSet(v)
+		default:
+			switch param := form.Get(namespace); param {
+			case "":
+				return nil
+			default:
+				return decodeUint(param, v, 32)
+			}
+		}
+	case reflect.Uint:
+		fallthrough
+	case reflect.Uint64:
+		switch v.CanSet() {
+		case false:
+			return CantSet(v)
+		default:
+			switch param := form.Get(namespace); param {
+			case "":
+				return nil
+			default:
+				return decodeUint(param, v, 64)
+			}
+		}
+	case reflect.Int8:
+		switch v.CanSet() {
+		case false:
+			return CantSet(v)
+		default:
+			switch param := form.Get(namespace); param {
+			case "":
+				return nil
+			default:
+				return decodeInt(param, v, 8)
+			}
+		}
+	case reflect.Int16:
+		switch v.CanSet() {
+		case false:
+			return CantSet(v)
+		default:
+			switch param := form.Get(namespace); param {
+			case "":
+				return nil
+			default:
+				return decodeInt(param, v, 16)
+			}
+		}
+	case reflect.Int32:
+		switch v.CanSet() {
+		case false:
+			return CantSet(v)
+		default:
+			switch param := form.Get(namespace); param {
+			case "":
+				return nil
+			default:
+				return decodeInt(param, v, 32)
+			}
+		}
 	case reflect.Int:
 		fallthrough
-	case reflect.Int32:
-		fallthrough
 	case reflect.Int64:
-		return encodeInt(name, v.Int()), nil
+		switch v.CanSet() {
+		case false:
+			return CantSet(v)
+		default:
+			switch param := form.Get(namespace); param {
+			case "":
+				return nil
+			default:
+				return decodeInt(param, v, 64)
+			}
+		}
+	case reflect.Float32:
+		switch v.CanSet() {
+		case false:
+			return CantSet(v)
+		default:
+			switch param := form.Get(namespace); param {
+			case "":
+				return nil
+			default:
+				return decodeFloat(param, v, 32)
+			}
+		}
 	case reflect.Float64:
-		return encodeFloat(name, v.Float()), nil
-	case reflect.Ptr:
-		return marshalValue(name, reflect.Indirect(v))
-	case reflect.Slice:
-		fallthrough
-	case reflect.Map:
-		return marshalComposite(name, v)
+		switch v.CanSet() {
+		case false:
+			return CantSet(v)
+		default:
+			switch param := form.Get(namespace); param {
+			case "":
+				return nil
+			default:
+				return decodeFloat(param, v, 64)
+			}
+		}
 	case reflect.String:
-		return encodeString(name, v.String()), nil
+		switch v.CanSet() {
+		case false:
+			return CantSet(v)
+		default:
+			v.SetString(form.Get(namespace))
+			return nil
+		}
+
+	// Composites
+	case reflect.Slice:
+		switch v.CanSet() {
+		case false:
+			return CantSet(v)
+		default:
+			switch param := form.Get(namespace); param {
+			case "":
+				return nil
+			default:
+				return unmarshalSlice(param, v)
+			}
+		}
+	case reflect.Map:
+		switch param := form.Get(namespace); param {
+		case "":
+			return nil
+		default:
+			return unmarshalMap(param, v)
+		}
 	case reflect.Struct:
-		return marshalStruct(name, v)
+		switch v.CanSet() {
+		case false:
+			return CantSet(v)
+		default:
+			return unmarshalStruct(form, v, namespace)
+		}
+
+	// Indirects
+	case reflect.Ptr:
+		if v.IsNil() {
+			v.Set(reflect.New(v.Type().Elem()))
+		}
+
+		return unmarshalValue(form, reflect.Indirect(v), namespace)
+	case reflect.Interface:
+		if v.IsNil() {
+			return nil
+		}
+
+		i := v.Interface()
+		if fe, ok := i.(Unmarshaler); ok {
+			return fe.UnmarshalForm(form, namespace)
+		}
+
+		return unmarshalValue(form, reflect.ValueOf(i), namespace)
+
+	// The default case is an error, a failure to evaluate the
+	// type of the value and select an adequate marshalling.
 	default:
-		panic(fmt.Sprintf("unrecognized kind: %s, of value: %v", v.Kind(), v))
+		return fmt.Errorf("unable to unmarshal value %v", v)
+	}
+}
+
+const datetimeLocalLayout = "2006-01-02T15:04"
+
+func decodeTime(param string, v reflect.Value) error {
+	t, err := time.Parse(datetimeLocalLayout, param)
+	if err != nil {
+		return err
+	}
+	v.Set(reflect.ValueOf(t))
+	return nil
+}
+
+func decodeBool(param string, v reflect.Value) error {
+	b, err := strconv.ParseBool(param)
+	if err != nil {
+		return err
+	}
+
+	v.SetBool(b)
+	return nil
+}
+
+func decodeUint(param string, v reflect.Value, bitSize int) error {
+	n, err := strconv.ParseUint(param, 10, bitSize)
+	if err != nil {
+		return err
+	}
+
+	v.SetUint(n)
+	return nil
+}
+
+func decodeInt(param string, v reflect.Value, bitSize int) error {
+	n, err := strconv.ParseInt(param, 10, bitSize)
+	if err != nil {
+		return err
+	}
+
+	v.SetInt(n)
+	return nil
+}
+
+func decodeFloat(param string, v reflect.Value, bitSize int) error {
+	f, err := strconv.ParseFloat(param, bitSize)
+	if err != nil {
+		return err
+	}
+
+	v.SetFloat(f)
+	return nil
+}
+
+func unmarshalSlice(param string, v reflect.Value) error {
+	// Create a pointer to a composite value and set it to the composite
+	x := reflect.New(v.Type())
+	x.Elem().Set(reflect.MakeSlice(v.Type(), 0, 0))
+
+	if err := json.Unmarshal([]byte(param), x.Interface()); err != nil {
+		return err
+	}
+
+	v.Set(x.Elem())
+	return nil
+}
+
+func unmarshalMap(param string, v reflect.Value) error {
+	if v.IsNil() {
+		v.Set(reflect.MakeMap(v.Type()))
+	}
+
+	x := reflect.New(v.Type())
+	x.Elem().Set(v)
+
+	return json.Unmarshal([]byte(param), x.Interface())
+}
+
+func unmarshalStruct(form url.Values, s reflect.Value, namespace string) error {
+	t := s.Type()
+
+	for i := 0; i < t.NumField(); i++ {
+		if err := unmarshalField(form, namespace, s, t.Field(i)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func unmarshalField(form url.Values, namespace string, s reflect.Value, f reflect.StructField) error {
+	switch field := s.FieldByIndex(f.Index); field.CanSet() {
+	case false: // unexported
+		return nil
+	default:
+		return unmarshalValue(form, field, path.Join(namespace, f.Name))
 	}
 }
