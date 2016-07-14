@@ -128,7 +128,7 @@ func EditGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db dat
 		return
 	}
 
-	if err := CreateTemplate.Execute(w, &CreateData{
+	if err := EditTemplate.Execute(w, &EditData{
 		FormHTML: template.HTML(string(b)),
 	}); err != nil {
 		l.Fatal(err)

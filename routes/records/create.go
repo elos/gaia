@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 
 	"github.com/elos/data"
 	"github.com/elos/gaia/routes/records/form"
@@ -14,34 +15,33 @@ import (
 	"golang.org/x/net/context"
 )
 
-const createTemplateRaw = `
-<html>
+const editTemplateRaw = `<html>
 	<body>
-		{{ with .Flash }}
+		{{ with .Flash -}}
 			{{ . }}
-		{{ end }}
+		{{- end }}
 
 		<form method="post">
 		{{ with .FormHTML }}
 			{{ . }}
 		{{ end }}
-			<input type="submit" value="Create">
+			{{ with .SubmitText }}
+				<input type="submit" value="{{ . }}">
+			{{ else }}
+				<input type="submit" value="Save">
+			{{ end }}
 		</form>
 	</body>
-</html>
-`
+</html>`
 
-var CreateTemplate = template.Must(
-	template.New("records/create").Funcs(template.FuncMap{
-		"castJS": func(s string) template.JS {
-			return template.JS(s)
-		},
-	}).Parse(createTemplateRaw),
+var EditTemplate = template.Must(
+	template.New("records/edit").Parse(editTemplateRaw),
 )
 
-type CreateData struct {
-	Flash    string
-	FormHTML template.HTML
+type EditData struct {
+	Flash      string
+	FormHTML   template.HTML
+	SubmitText string
 }
 
 // CreateGET handles a `GET` request to the `/records/create/` route of the records web UI.
@@ -54,48 +54,47 @@ type CreateData struct {
 // CreateGET provides a web frame to create a new record of the provided `kind`.
 //
 // Success:
-//		* StatusOK, return web frame
+//		* StatusOK
+//			- html page with form to create the model
 //
 // Errors:
-//		* StatusBadRequest, {no kind parameter found, kind not recognized}
-//		* StatusInternalServerError, {error parsing, et al.}
+//		* StatusBadRequest:
+//			- missing kind
+//			- unrecognized kind
+//		* StatusInternalServerError
+//			- error parsing form
+//			- error marshalling model into form
+//			- error executing template
 func CreateGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, l services.Logger) {
 	if err := r.ParseForm(); err != nil {
-		l.Printf("r.ParseForm() error: %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	k := r.FormValue(kindParam)
+	k := r.FormValue("kind")
 	if k == "" {
-		l.Printf("r.FormValue(kindParam): got %q, want a non-empty string", k)
-		http.Error(w, fmt.Sprintf("You must specify a %q parameter", kindParam), http.StatusBadRequest)
+		http.Error(w, "Missing parameter: \"kind\"", http.StatusBadRequest)
 		return
 	}
 	kind := data.Kind(k)
 
-	// Lookup the kind to ensure its existence.
-	if _, ok := models.Kinds[kind]; !ok {
-		l.Printf("_, ok := models.Kind[kind]: got %t, want true", ok)
-		http.Error(w, fmt.Sprintf("The kind %q is not recognized", kind), http.StatusNotFound)
+	if !models.Kinds[kind] {
+		http.Error(w, fmt.Sprintf("Unrecognized kind: %q", k), http.StatusBadRequest)
 		return
 	}
 
-	m := models.ModelFor(kind)
-	b, err := form.Marshal(m, string(kind))
+	b, err := form.Marshal(models.ModelFor(kind), k)
 	if err != nil {
-		l.Printf("form.Marshal error: %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	cd := &CreateData{
-		Flash:    "The record has not yet been created, you must save",
-		FormHTML: template.HTML(string(b)),
-	}
-
-	if err := CreateTemplate.Execute(w, cd); err != nil {
-		l.Fatalf("CreateTemplate.Execute error: %v", err)
+	if err := EditTemplate.Execute(w, &EditData{
+		Flash:      "The record has not yet been created, you must save",
+		FormHTML:   template.HTML(string(b)),
+		SubmitText: "Create",
+	}); err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
 }
 
@@ -111,103 +110,83 @@ func CreateGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db d
 // from the form parameters.
 //
 // Success:
-//		* StatusFound, redirect to `/records/view/?kind=<dynamic>&id=<dynamic>` (i.e., redirects to viewing the record
-//		which was just created
+//		* StatusFound
+//			- record created, redirect to /view/
 //
 // Errors:
-//		* 400, malformed parameters
-//		* 404, kind parameter not recognized
-//		* 500, {error parsing, et al.}
+//		* StatusBadRequest
+//			- missing kind
+//			- unrecognized kind
+//		* StatusUnauthorized
+//			- model not property
+//			- access.CanCreate false
+//		* StatusInternalServerError
+//			- r.ParseForm error
+//			- unmarshalling model
+//			- missing user on ctx
+//			- access.CanCreate error
+//			- db.Save error
 func CreatePOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, l services.Logger) {
 	if err := r.ParseForm(); err != nil {
-		l.Printf("r.ParseForm() error: %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	k := r.FormValue(kindParam)
 	if k == "" {
-		l.Printf("r.FormValue(kindParam): got %q, want a non-empty string", k)
-		http.Error(w, fmt.Sprintf("You must specify a %q parameter", kindParam), http.StatusBadRequest)
+		http.Error(w, "Missing parameter \"kind\"", http.StatusBadRequest)
 		return
 	}
 	kind := data.Kind(k)
 
-	// Lookup the kind to ensure its existence.
-	if _, ok := models.Kinds[kind]; !ok {
-		l.Printf("_, ok := models.Kind[kind]: got %t, want true", ok)
-		http.Error(w, fmt.Sprintf("The kind %q is not recognized", kind), http.StatusNotFound)
+	if !models.Kinds[kind] {
+		http.Error(w, fmt.Sprintf("Unrecognized kind: %q", k), http.StatusBadRequest)
 		return
 	}
 
 	m := models.ModelFor(kind)
-
-	if err := form.Unmarshal(r.Form, m, string(kind)); err != nil {
-		l.Printf("info: r.Form :\n%v", r.Form)
-		l.Printf("error: while unmarshalling form, %v", err)
+	if err := form.Unmarshal(r.Form, m, kind.String()); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
+	if m.ID().String() == "" {
+		m.SetID(db.NewID())
+	}
 
-	m.SetID(db.NewID())
-
-	// Retrieve our user
 	u, ok := user.FromContext(ctx)
 	if !ok {
-		l.Print("failed to retrieve user from context")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	prop, ok := m.(access.Property)
 	if !ok {
-		l.Printf("tried to create record that isn't property")
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
 	}
 
-	allowed, err := access.CanCreate(db, u, prop)
-
+	ok, err := access.CanCreate(db, u, prop)
 	if err != nil {
-		l.Printf("access.CanCreate error: %s", err)
-		switch err {
-		// This indicates that no, you have no access
-		case data.ErrAccessDenial:
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-		// All of these are bad, and considered an internal error
-		case data.ErrNotFound:
-			fallthrough
-		case data.ErrNoConnection:
-			fallthrough
-		case data.ErrInvalidID:
-			fallthrough
-		default:
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		}
-		return
-	} else if !allowed {
-		l.Printf("access denied at create/update stage")
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
 	}
 
-	// If we have made it this far, it only remains to commit the record
-	if err = db.Save(m); err != nil {
-		l.Printf("error saving record: %s", err)
-		switch err {
-		case data.ErrAccessDenial:
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-		// These are all equally distressing
-		case data.ErrNotFound: // TODO shouldn't a not found not be fing impossible for a Save?
-			fallthrough
-		case data.ErrNoConnection:
-			fallthrough
-		case data.ErrInvalidID:
-		default:
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		}
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/records/view/?kind=%s&id=%s", m.Kind(), m.ID()), http.StatusFound)
+	if err := db.Save(m); err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(
+		w, r,
+		"/records/view/?"+url.Values{
+			"kind": []string{m.Kind().String()},
+			"id":   []string{m.ID().String()},
+		}.Encode(),
+		http.StatusFound,
+	)
 }
