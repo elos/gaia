@@ -3,7 +3,6 @@ package form
 import (
 	"bytes"
 	"fmt"
-	"net/http"
 )
 
 type Form struct {
@@ -60,15 +59,4 @@ func (f *Form) MarshalForm(namespace string) ([]byte, error) {
 	b.WriteString("</form>")
 
 	return b.Bytes(), nil
-}
-
-func Must(param string) func(w http.ResponseWriter, r *http.Request) (string, bool) {
-	return func(w http.ResponseWriter, r *http.Request) (string, bool) {
-		val := r.FormValue(param)
-		if val == "" {
-			http.Error(w, fmt.Sprintf("You must specify a %q parameter", param), http.StatusBadRequest)
-			return val, false
-		}
-		return val, true
-	}
 }
