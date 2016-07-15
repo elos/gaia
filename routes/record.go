@@ -268,7 +268,7 @@ func RecordPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, log
 		return
 	}
 
-	l.Printf("%+v", r)
+	//	l.Printf("%+v", r)
 
 	// Retrieve the kind parameter
 	k := r.FormValue(kindParam)

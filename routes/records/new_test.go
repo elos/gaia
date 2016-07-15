@@ -52,6 +52,10 @@ func TestNewGET(t *testing.T) {
 	t.Logf("resp.Body:\n%s", body)
 
 	for name := range models.Metis {
+		if name == "user" {
+			continue
+		}
+
 		if got, want := bytes.Contains(body, []byte(name)), true; got != want {
 			t.Errorf("strings.Contains(out, %q): got %t, want %t", name, got, want)
 		}

@@ -42,6 +42,18 @@ type NewData struct {
 	Models map[data.Kind]*metis.Model
 }
 
+var instantiableModels = make(map[data.Kind]*metis.Model)
+
+func init() {
+	for kind, model := range models.Metis {
+		switch kind {
+		case models.UserKind:
+		default:
+			instantiableModels[kind] = model
+		}
+	}
+}
+
 // NewGET handles a `GET` request to the `/records/new/` route of the records web UI.
 //
 // Parameters: {}
@@ -57,7 +69,7 @@ type NewData struct {
 //			- NewTemplate.Execute error
 func NewGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
 	if err := NewTemplate.Execute(w, &NewData{
-		Models: models.Metis,
+		Models: instantiableModels,
 	}); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}

@@ -2,6 +2,7 @@ package routes
 
 import (
 	"bytes"
+	"html/template"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"github.com/elos/data/builtin/mem"
 	"github.com/elos/data/transfer"
 	"github.com/elos/gaia/routes/records"
+	"github.com/elos/gaia/routes/records/form"
 	"github.com/elos/gaia/services"
 	"github.com/elos/metis"
 	"github.com/elos/models"
@@ -39,7 +41,6 @@ func TestRecordsQueryTemplate(t *testing.T) {
 		creds[i] = m
 	}
 	s := &records.QueryData{
-		Kind:    models.CredentialKind,
 		Model:   models.Metis[models.CredentialKind],
 		Records: creds,
 	}
@@ -85,7 +86,7 @@ func TestRecordsQueryGET(t *testing.T) {
 
 	c := new(http.Client)
 	req, err := http.NewRequest("GET", s.URL+"?"+url.Values{
-		"kind": []string{"credential"},
+		"query/Kind": []string{"credential"},
 	}.Encode(), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -222,28 +223,31 @@ func TestRecordsNewGET(t *testing.T) {
 // --- TestRecordsEditTemplate {{{
 
 func TestRecordsEditTemplate(t *testing.T) {
-	re := &records.EditData{
-		Flash: "this is the flash",
-		Model: models.Metis[models.EventKind],
-		Record: map[string]interface{}{
-			"name": "this is the name",
-		},
-		JSON: `{
-			"name": "this is the name",
-		}`,
+	e := &models.Event{
+		Name: "this is the name",
 	}
 
-	b := new(bytes.Buffer)
-	if err := records.EditTemplate.Execute(b, re); err != nil {
+	b, err := form.Marshal(e, e.Kind().String())
+	if err != nil {
+		t.Fatalf("form.Marshal error: %v", err)
+	}
+
+	cd := &records.EditData{
+		Flash:    "this is the flash",
+		FormHTML: template.HTML(string(b)),
+	}
+
+	buf := new(bytes.Buffer)
+	if err := records.EditTemplate.Execute(buf, cd); err != nil {
 		t.Fatalf("records.EditTemplate.Execute error: %s", err)
 	}
 
-	o := b.String()
+	o := buf.String()
 	t.Logf("Output:\n%s", o)
 
 	contains := map[string]bool{
 		"this is the flash": true,
-		"name":              true,
+		"Name":              true,
 		"this is the name":  true,
 		"credential":        false,
 	}
