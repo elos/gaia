@@ -124,6 +124,21 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 		}
 	}, s.Logger))
 
+	// /records/view/
+	mux.HandleFunc(routes.RecordsView, logRequest(func(w http.ResponseWriter, r *http.Request) {
+		ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
+		if !ok {
+			return
+		}
+		switch r.Method {
+		case "GET":
+			routes.Records.ViewGET(ctx, w, r, s.DB, s.Logger)
+		default:
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+	}, s.Logger))
+
 	// /register/
 	mux.HandleFunc(routes.Register, logRequest(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
