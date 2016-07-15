@@ -381,7 +381,12 @@ func unmarshalValue(form url.Values, v reflect.Value, namespace string) error {
 		case false:
 			return CantSet(v)
 		default:
-			v.SetString(form.Get(namespace))
+			switch param := form.Get(namespace); param {
+			case "":
+				return nil
+			default:
+				v.SetString(param)
+			}
 			return nil
 		}
 

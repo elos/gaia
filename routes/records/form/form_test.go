@@ -506,6 +506,30 @@ func TestUnmarshal(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "struct/alreadystate",
+			values: url.Values{
+				"struct/composite/Bar": []string{`null`},
+			},
+			into: &struct {
+				Foo string
+				Bar map[string]string
+			}{
+				Foo: "don't modify",
+				Bar: map[string]string{
+					"don't": "modify",
+				},
+			},
+			want: struct {
+				Foo string
+				Bar map[string]string
+			}{
+				Foo: "don't modify",
+				Bar: map[string]string{
+					"don't": "modify",
+				},
+			},
+		},
 	}
 
 	for _, c := range cases {
