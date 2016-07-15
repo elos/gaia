@@ -85,6 +85,7 @@ func TestViewGET(t *testing.T) {
 		"public":     true,
 		"password":   true,
 		"owner":      true,
+		"/records/edit/?kind=credential&id=2": true,
 
 		"user": false,
 	}

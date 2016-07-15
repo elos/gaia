@@ -19,7 +19,7 @@ const viewTemplateRaw = `
 	<body>
 		{{ with .Flash }} {{ . }} {{ end }}
 		{{ if .Record }}
-		{{ with .Kind }} {{ . }} {{ end }}
+		{{ with .Kind }} This is a "{{ . }}" {{ end }}
 		<table>
 			<thead>
 				<tr> <th> Attribute </th> <th> Value </th>
@@ -33,15 +33,17 @@ const viewTemplateRaw = `
 		{{ else }}
 			No Model
 		{{ end }}
+		{{ if and .Kind .ID }}
+			<a href="/records/edit/?kind={{ .Kind }}&id={{ .ID }}"> Edit </a>
+		{{ end }}
 	</body>
 </html>`
 
 var ViewTemplate = template.Must(template.New("records/view").Parse(viewTemplateRaw))
 
 type ViewData struct {
-	Flash  string
-	Kind   data.Kind
-	Record map[string]interface{}
+	Flash, Kind, ID string
+	Record          map[string]interface{}
 }
 
 // ViewGET handles a `GET` request to the `/records/view/` route of the records web UI.
@@ -149,7 +151,8 @@ func ViewGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db dat
 	}
 
 	if err := ViewTemplate.Execute(w, &ViewData{
-		Kind:   kind,
+		Kind:   k,
+		ID:     i,
 		Record: attrMap,
 	}); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
