@@ -2,7 +2,6 @@ package records_test
 
 import (
 	"bytes"
-	"html/template"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -11,28 +10,11 @@ import (
 
 	"github.com/elos/data/builtin/mem"
 	"github.com/elos/gaia/routes/records"
-	"github.com/elos/gaia/routes/records/form"
 	"github.com/elos/gaia/services"
 	"github.com/elos/models"
 	"github.com/elos/models/user"
 	"golang.org/x/net/context"
 )
-
-func TestEditTemplate(t *testing.T) {
-	b, err := form.Marshal(new(models.Task), models.TaskKind.String())
-	if err != nil {
-		t.Fatalf("form.Marshal(task, string(models.TaskKind)) error: %v", err)
-	}
-
-	if err := records.EditTemplate.Execute(
-		ioutil.Discard,
-		&records.EditData{
-			Flash:    "flash message",
-			FormHTML: template.HTML(string(b)),
-		}); err != nil {
-		t.Fatalf("records.EditTemplate.Execute error: %v", err)
-	}
-}
 
 func TestCreateGET(t *testing.T) {
 	db := mem.NewDB()
@@ -53,7 +35,7 @@ func TestCreateGET(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ioutil.ReadAll error: %v", err)
 	}
-	defer t.Logf("resp.Body:\n%s", body)
+	t.Logf("resp.Body:\n%s", body)
 
 	if got, want := bytes.Contains(body, []byte(`event`)), true; got != want {
 		t.Fatalf("bytes.Contains(body, %q): got %t, want %t", "event", got, want)
@@ -88,7 +70,7 @@ func TestCreatePOST(t *testing.T) {
 	if err != nil {
 		t.Fatalf("iotuil.ReadAll error: %v", err)
 	}
-	defer t.Logf("resp.Body:\n%s", body)
+	t.Logf("resp.Body:\n%s", body)
 
 	iter, err := db.Query(models.EventKind).Execute()
 	if err != nil {

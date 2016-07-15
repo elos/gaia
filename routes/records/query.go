@@ -1,17 +1,18 @@
 package records
 
 import (
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
-	"strconv"
 
 	"github.com/elos/data"
 	"github.com/elos/data/transfer"
+	"github.com/elos/gaia/routes/records/form"
 	"github.com/elos/gaia/services"
 	"github.com/elos/metis"
 	"github.com/elos/models"
+	"github.com/elos/models/access"
+	"github.com/elos/models/user"
 	"golang.org/x/net/context"
 )
 
@@ -23,26 +24,11 @@ const (
 	selectParam = "select"
 )
 
-// --- queryTemplateRaw {{{
-
 const queryTemplateRaw = `
 <html>
 	<body>
 		<form id="queryForm" method="get">
-			<fieldset>
-				<legend>Query:</legend>
-				<label for="kind">Kind:</label>
-				<input type="text"   name="kind"  placeholder="string"  {{ with .Kind -}}  value="{{- . -}}" {{- end -}} />
-				<label for="limit">Limit:</label>
-				<input type="number" name="limit" placeholder="int"     {{ with .Limit -}} value="{{- . -}}" {{- end -}} />
-				<label for="batch">Batch:</label>
-				<input type="number" name="batch" placeholder="int"     {{ with .Batch -}} value="{{- . -}}" {{- end -}} />
-				<label for="skip">Skip:</label>
-				<input type="number" name="skip"  placeholder="int"     {{ with .Skip -}}  value="{{- . -}}" {{- end -}} />
-				<label for="select">Select:</label>
-				<textarea name="select" form="queryForm"> {{- with .Select -}} {{- . -}} {{- end -}} </textarea>
-				<input type="submit" />
-			</fieldset>
+			{{ .QueryFormHTML }}
 		</form>
 		{{ with .Flash }} {{- . -}} {{ end }}
 		{{ if .Model }}
@@ -72,113 +58,153 @@ const queryTemplateRaw = `
 				</tbody>
 			</table>
 		{{ else }}
-		No model
+			No model
 		{{ end }}
 	</body>
 </html>
 `
 
-// --- }}}
-
 var QueryTemplate = template.Must(template.New("records/query").Parse(queryTemplateRaw))
 
 type QueryData struct {
-	Kind               data.Kind
-	Batch, Limit, Skip int
-	Select             string
-	Flash              string
-	Model              *metis.Model
-	Records            []map[string]interface{}
+	Flash         string
+	QueryFormHTML template.HTML
+	Model         *metis.Model
+	Records       []map[string]interface{}
 }
 
+type query struct {
+	Kind   data.Kind
+	Limit  int
+	Batch  int
+	Skip   int
+	Select map[string]interface{}
+}
+
+// QueryGET handles a `GET` request to the `/records/query/` route of the records web UI.
+//
+// Parameters:
+//		{
+//			query/Kind   string                 (optional)
+//			query/Limit  int                    (optional)
+//			query/Batch  int                    (optional)
+//			query/Skip   int                    (optional)
+//			query/Select map[string]interface{} (optional)
+//		}
+//
+// QueryGET first checks for a kind. If it recieves none, it returns a form to submit a query.
+// Next it issues a query based on the query structure unmarshaled from the form namespaced
+// to query, and then servers a table of the matching records.
+//
+// Success:
+//		* StatusOK
+//			- html page with form to issue query (and possibly a table of records matching the present query)
+//
+// Errors:
+//		* StatusBadRequest
+//			- unrecognized kind
+//		* StatusInternalServerError
+//			- r.ParseForm error
+//			- form.Unmarshal error
+//			- form.Marshal error
+//			- QueryTemplate.Execute error (by 3 paths)
+//			- ctx missing user
+//			- execute error
 func QueryGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
-	l := logger.WithPrefix("RecordsQueryGET: ")
-	s, err := Query(ctx, r, db, logger)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	q := new(query)
+	if err := form.Unmarshal(r.Form, q, "query"); err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	formbytes, err := form.Marshal(q, "query")
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	if err := QueryTemplate.Execute(w, s); err != nil {
-		l.Fatal(err)
+	if q.Kind == data.Kind("") {
+		if QueryTemplate.Execute(w, &QueryData{
+			Flash:         "Missing kind",
+			QueryFormHTML: template.HTML(string(formbytes)),
+		}); err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	if !models.Kinds[q.Kind] {
+		if QueryTemplate.Execute(w, &QueryData{
+			Flash:         "Invalid kind",
+			QueryFormHTML: template.HTML(string(formbytes)),
+		}); err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	u, ok := user.FromContext(ctx)
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	rs, err := execute(db, u, q)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	if err := QueryTemplate.Execute(w, &QueryData{
+		Flash:         fmt.Sprintf("%d results.", len(rs)),
+		QueryFormHTML: template.HTML(string(formbytes)),
+		Model:         models.Metis[q.Kind],
+		Records:       rs,
+	}); err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
 }
 
-func Query(ctx context.Context, r *http.Request, db data.DB, logger services.Logger) (*QueryData, error) {
-	l := logger.WithPrefix("recordsGet: ")
+// execute retrieves the records matching a *query, which the user can read, and marshals them to attr maps.
+//
+// Errors:
+//		- db.Query error
+//		- access.CanRead error
+//		- iter.Close error
+func execute(db data.DB, u *models.User, q *query) ([]map[string]interface{}, error) {
+	rs := make([]map[string]interface{}, 0)
 
-	s := new(QueryData)
-
-	// Secure the kind parameter's existence, and superficial validity (i.e., non-empty)
-	k := r.FormValue(kindParam)
-	if k == "" {
-		l.Printf("no kind parameter")
-		s.Flash = fmt.Sprintf("You must specify a '%s' parameter", kindParam)
-		return s, nil
-	}
-	kind := data.Kind(k)
-
-	// Ensure the kind is recognized
-	if _, ok := models.Kinds[kind]; !ok {
-		l.Printf("unrecognized kind: %q", kind)
-		s.Flash = fmt.Sprintf("The kind %q is not recognized", kind)
-		return s, nil
-	}
-
-	s.Kind = kind
-
-	// Retrieve the limit, batch and skip parameters
-	lim := r.FormValue(limitParam)
-	bat := r.FormValue(batchParam)
-	ski := r.FormValue(skipParam)
-
-	// Set up the variables to apply to the query
-	var limit, batch, skip int
-	if lim != "" {
-		limit, _ = strconv.Atoi(lim)
-	} else if bat != "" {
-		batch, _ = strconv.Atoi(bat)
-	} else if ski != "" {
-		skip, _ = strconv.Atoi(ski)
-	}
-
-	s.Limit = limit
-	s.Batch = batch
-	s.Skip = skip
-
-	selectString := r.FormValue(selectParam)
-	attrs := data.AttrMap{}
-	if selectString != "" {
-		if err := json.Unmarshal([]byte(selectString), &attrs); err != nil {
-			l.Printf("json.Unmarshal(bytes(selectString), &attrs) error: %v", err)
-			s.Flash = fmt.Sprintf("Failure unmarshalling json: %v", err)
-			return s, nil
-		}
-	}
-	bytes, err := json.MarshalIndent(attrs, "", "	")
-	if err != nil {
-		l.Printf("json.MarshalIndent error: %v", err)
-		s.Flash = fmt.Sprintf("Failure marshalling json: %v", err)
-		return s, nil
-	}
-	s.Select = string(bytes)
-
-	iter, err := db.Query(s.Kind).Limit(limit).Batch(batch).Skip(skip).Select(attrs).Execute()
+	iter, err := db.Query(q.Kind).Limit(q.Limit).Batch(q.Batch).Skip(q.Skip).Select(q.Select).Execute()
 	if err != nil {
 		return nil, err
 	}
-	m := models.ModelFor(s.Kind)
+
+	m := models.ModelFor(q.Kind)
 	for iter.Next(m) {
+		ok, err := access.CanRead(db, u, m)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if !ok {
+			continue
+		}
+
 		temp := make(map[string]interface{})
 		transfer.TransferAttrs(m, &temp)
-		s.Records = append(s.Records, temp)
-		m = models.ModelFor(s.Kind)
+		rs = append(rs, temp)
+		m = models.ModelFor(q.Kind)
 	}
+
 	if err := iter.Close(); err != nil {
 		return nil, err
 	}
 
-	s.Model = models.Metis[s.Kind]
-
-	return s, nil
+	return rs, nil
 }

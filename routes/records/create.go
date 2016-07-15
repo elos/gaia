@@ -55,16 +55,18 @@ type EditData struct {
 //
 // Success:
 //		* StatusOK
-//			- html page with form to create the model
+//			- html page with form to create the record
 //
 // Errors:
 //		* StatusBadRequest:
 //			- missing kind
 //			- unrecognized kind
+//		* StatusUnauthorized
+//			- model.(access.Property) false
 //		* StatusInternalServerError
 //			- error parsing form
 //			- error marshalling model into form
-//			- error executing template
+//			- EditTemplate.Execute error
 func CreateGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, l services.Logger) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -83,7 +85,14 @@ func CreateGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db d
 		return
 	}
 
-	b, err := form.Marshal(models.ModelFor(kind), k)
+	m := models.ModelFor(kind)
+
+	if _, ok := m.(access.Property); !ok {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	b, err := form.Marshal(m, k)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -101,17 +110,17 @@ func CreateGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db d
 // CreatePOST handles a `POST` request to the `/records/create/` route of the records web UI.
 //
 // Parameters:
-//	{
-//		kind string
-//		<arbitrary-fields> {string|[]string}
-//	}
+//		{
+//			kind string
+//			<arbitrary-fields> {string|[]string}
+//		}
 //
-// CreatePOST creates the record matching the `kind`, and dynamically pulls the appropriate attributes
+// CreatePOST creates the record by matching the `kind`, and dynamically pulls the appropriate attributes
 // from the form parameters.
 //
 // Success:
 //		* StatusFound
-//			- record created, redirect to /view/
+//			- record created, redirect to /records/view/
 //
 // Errors:
 //		* StatusBadRequest
@@ -123,7 +132,7 @@ func CreateGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db d
 //		* StatusInternalServerError
 //			- r.ParseForm error
 //			- unmarshalling model
-//			- missing user on ctx
+//			- ctx missing user
 //			- access.CanCreate error
 //			- db.Save error
 func CreatePOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, l services.Logger) {
@@ -132,7 +141,7 @@ func CreatePOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db 
 		return
 	}
 
-	k := r.FormValue(kindParam)
+	k := r.FormValue("kind")
 	if k == "" {
 		http.Error(w, "Missing parameter \"kind\"", http.StatusBadRequest)
 		return

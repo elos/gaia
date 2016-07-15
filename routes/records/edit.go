@@ -1,11 +1,10 @@
 package records
 
 import (
-	"encoding/json"
 	"fmt"
 	"html/template"
-	"io/ioutil"
 	"net/http"
+	"net/url"
 
 	"github.com/elos/data"
 	"github.com/elos/gaia/routes/records/form"
@@ -20,233 +19,226 @@ const (
 	idParam = "id"
 )
 
+// EditGET handles a `GET` request to the `/records/edit/` route of the records web UI.
+//
+// Parameters:
+//		{
+//			kind string
+//			id string
+//		}
+//
+// EditGET presents an HTML form containing the record under question.
+//
+// Success:
+//		* StatusOK
+//			- html page with form to edit record
+// Errors:
+//		* StatusBadRequest
+//			- missing kind
+//			- unrecognized kind
+//			- missing id
+//			- invalid id
+//		* StatusUnauthorized
+//			- access.CanWrite false
+//		* StatusNotFound
+//			- db.PopulateByID data.ErrNotFound
+//		* StatusInternalServerError
+//			- r.ParseForm error
+//			- db.PopulateByID error
+//			- ctx missing user
+//			- access.CanWrite error
+//			- form.Marshal error
+//			- EditTemplate.Execute error
 func EditGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
-	l := logger.WithPrefix("RecordsEditGET: ")
-
-	// Parse the form value
 	if err := r.ParseForm(); err != nil {
-		l.Printf("error parsing form: %s", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	// Secure the kind parameter's existence, and superficial validity (i.e., non-empty)
-	k := r.FormValue(kindParam)
+	k := r.FormValue("kind")
 	if k == "" {
-		l.Printf("no kind parameter")
-		http.Error(w, fmt.Sprintf("You must specify a '%s' parameter", kindParam), http.StatusBadRequest)
+		http.Error(w, "Missing parameter \"kind\"", http.StatusBadRequest)
 		return
 	}
 	kind := data.Kind(k)
 
-	// Secure the id parameter's existence, and superficial validity (i.e., non-empty)
-	i := r.FormValue(idParam)
+	if !models.Kinds[kind] {
+		http.Error(w, fmt.Sprintf("Unrecognized kind: %q", k), http.StatusBadRequest)
+		return
+	}
+
+	i := r.FormValue("id")
 	if i == "" {
-		l.Printf("no id parameter")
-		http.Error(w, fmt.Sprintf("You must specify a '%s' parameter", idParam), http.StatusBadRequest)
+		http.Error(w, "Missing parameter \"id\"", http.StatusBadRequest)
 		return
 	}
 
-	// Ensure the kind is recognized
-	if _, ok := models.Kinds[kind]; !ok {
-		l.Printf("unrecognized kind: %q", kind)
-		http.Error(w, fmt.Sprintf("The kind %q is not recognized", kind), http.StatusBadRequest)
-		return
-	}
-
-	// Ensure the id is valid
 	id, err := db.ParseID(i)
 	if err != nil {
-		l.Printf("unrecognized id: %q, err: %s", i, err)
-		http.Error(w, fmt.Sprintf("The id %q is invalid", i), http.StatusBadRequest)
+		http.Error(w, "Invalid \"id\"", http.StatusBadRequest)
 		return
 	}
 
 	m := models.ModelFor(kind)
 	m.SetID(id)
+	switch err := db.PopulateByID(m); err {
+	case data.ErrNotFound:
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		return
+	default:
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
 
-	if err := db.PopulateByID(m); err != nil {
-		switch err {
-		// ErrAccessDenial and ErrNotFound are "normal" courses, in the sense that they
-		// may be expected in normal usage.
-		case data.ErrAccessDenial:
-			fallthrough // don't leak information, make it look like a 404
-		case data.ErrNotFound:
-			// This is, by far, the most common error case here.
-			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-		// ErrNoConnection, ErrInvalidID and the under-determined errors are all non-normal cases
-		case data.ErrNoConnection:
-			fallthrough
-		case data.ErrInvalidID:
-			fallthrough
-		default:
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		}
-		l.Printf("db.PopulateByID error: %s", err)
-		return // regardless of what the error was, we are bailing
+	case nil:
 	}
 
-	// Retrieve the user this request was authenticated as
 	u, ok := user.FromContext(ctx)
-	if !ok { // This is certainly an issue, and should _never_ happen
-		l.Print("failed to retrieve user from context")
+	if !ok {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	// Now we impose the system access control, beyond the database access control
-	// TODO: limit the domain of errors CanRead returns
-	if allowed, err := access.CanRead(db, u, m); err != nil {
-		switch err {
-		// Again, though odd, both of these are arguably expected
-		case data.ErrAccessDenial:
-			fallthrough // don't leak information
-		case data.ErrNotFound:
-			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-		// These are not-expected
-		case data.ErrNoConnection:
-			fallthrough
-		case data.ErrInvalidID:
-			fallthrough
-		default:
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		}
-		l.Printf("access.CanRead error: %s", err)
-		return
-	} else if !allowed {
-		// If you can't read the record you are asking for,
-		// it "does not exist" as far as you are concerned
-		l.Print("access denied")
-		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+	ok, err = access.CanWrite(db, u, m)
+
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	b, err := form.Marshal(m, string(kind))
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	b, err := form.Marshal(m, k)
 	if err != nil {
-		l.Printf("form.Marshal error: %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	if err := EditTemplate.Execute(w, &EditData{
-		FormHTML: template.HTML(string(b)),
+		FormHTML:   template.HTML(string(b)),
+		SubmitText: "Update",
 	}); err != nil {
-		l.Fatal(err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
 }
 
+// EditPOST handles a `POST` request to the `/records/edit/` routes of the records web UI.
+//
+// Parameters:
+//		{
+//			kind string
+//			id string
+//			<arbitrary-fields> {string|[]string}
+//		}
+//
+// EditPOST updates the record by matching `kind` and `id` parameters, and dynamically pulls the approriate attributes
+// from the form parameters.
+//
+// Success:
+//		* StatusFound
+//			- record updated, redirect to /records/view/
+//
+// Errors:
+//		* StatusBadRequest
+//			- missing kind
+//			- unrecognized kind
+//			- missing id
+//			- invalid id
+//		* StatusUnauthorized
+//			- model not property
+//			- access.CanWrite false
+//		* StatusNotFound
+//			- db.PopulateByID data.ErrNotFound
+//		* StatusInternalServerError
+//			- r.ParseForm error
+//			- unmarshalling model
+//			- db.PopulateByID error
+//			- ctx missing user
+//			- access.CanWrite error
+//			- db.Save error
 func EditPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
-	l := logger.WithPrefix("EditPOST")
-
 	if err := r.ParseForm(); err != nil {
-		l.Printf("r.ParseForm() error: %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	k := r.FormValue(kindParam)
+	k := r.FormValue("kind")
 	if k == "" {
-		l.Printf("r.FormValue(kindParam): got %q, want a non-empty string", k)
-		http.Error(w, fmt.Sprintf("You must specify a %q parameter", kindParam), http.StatusBadRequest)
+		http.Error(w, "Missing parameter \"kind\"", http.StatusBadRequest)
 		return
 	}
 	kind := data.Kind(k)
 
-	// Lookup the kind to ensure its existence.
-	if _, ok := models.Kinds[kind]; !ok {
-		l.Printf("_, ok := models.Kind[kind]: got %t, want true", ok)
-		http.Error(w, fmt.Sprintf("The kind %q is not recognized", kind), http.StatusNotFound)
+	if !models.Kinds[kind] {
+		http.Error(w, fmt.Sprintf("Unrecognized kind: %q", k), http.StatusBadRequest)
 		return
 	}
 
-	// Secure the id parameter's existence, and superficial validity (i.e., non-empty)
-	i := r.FormValue(idParam)
+	i := r.FormValue("id")
 	if i == "" {
-		l.Printf("no id parameter")
-		http.Error(w, fmt.Sprintf("You must specify a '%s' parameter", idParam), http.StatusBadRequest)
+		http.Error(w, "Missing parameter \"id\"", http.StatusBadRequest)
 		return
 	}
 
-	// Ensure the id is valid
 	id, err := db.ParseID(i)
 	if err != nil {
-		l.Printf("unrecognized id: %q, err: %s", i, err)
-		http.Error(w, fmt.Sprintf("The id %q is invalid", i), http.StatusBadRequest)
+		http.Error(w, "Invalid \"id\"", http.StatusBadRequest)
 		return
 	}
 
 	m := models.ModelFor(kind)
-
-	var requestBody []byte
-
-	// Now we must read the body of the request
-	defer r.Body.Close() // don't forget to close it
-	if requestBody, err = ioutil.ReadAll(r.Body); err != nil {
-		l.Printf("error while reading request body: %s", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	// Now we unmarshal that into the record
-	if err = json.Unmarshal(requestBody, m); err != nil {
-		l.Printf("info: request body:\n%s", string(requestBody))
-		l.Printf("error: while unmarshalling request body, %s", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
 	m.SetID(id)
+	if err := db.PopulateByID(m); err != nil {
+		if err == data.ErrNotFound {
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+			return
+		}
 
-	// Retrieve our user
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	if err := form.Unmarshal(r.Form, m, k); err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
 	u, ok := user.FromContext(ctx)
 	if !ok {
-		l.Print("failed to retrieve user from context")
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	allowed, err := access.CanWrite(db, u, m)
-
-	if err != nil {
-		l.Printf("access.CanWrite error: %s", err)
-		switch err {
-		// This indicates that no, you have no access
-		case data.ErrAccessDenial:
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-		// All of these are bad, and considered an internal error
-		case data.ErrNotFound:
-			fallthrough
-		case data.ErrNoConnection:
-			fallthrough
-		case data.ErrInvalidID:
-			fallthrough
-		default:
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		}
-		return
-	} else if !allowed {
-		l.Printf("access denied at create/update stage")
+	prop, ok := m.(access.Property)
+	if !ok {
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
 	}
 
-	// If we have made it this far, it only remains to commit the record
-	if err = db.Save(m); err != nil {
-		l.Printf("error saving record: %s", err)
-		switch err {
-		case data.ErrAccessDenial:
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-		// These are all equally distressing
-		case data.ErrNotFound: // TODO shouldn't a not found not be fing impossible for a Save?
-			fallthrough
-		case data.ErrNoConnection:
-			fallthrough
-		case data.ErrInvalidID:
-		default:
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		}
+	ok, err = access.CanWrite(db, u, prop)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/records/view/?kind=%s&id=%s", m.Kind(), m.ID()), http.StatusFound)
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	if err := db.Save(m); err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	http.Redirect(
+		w, r,
+		"/records/view/?"+url.Values{
+			"kind": []string{m.Kind().String()},
+			"id":   []string{m.ID().String()},
+		}.Encode(),
+		http.StatusFound,
+	)
 }
