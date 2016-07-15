@@ -56,35 +56,35 @@ func (l *logger) WithPrefix(s string) Logger {
 // --- TestLogger {{{
 
 type testLogger struct {
-	*testing.T
+	testing.TB
 	prefix string
 }
 
-func NewTestLogger(t *testing.T) Logger {
+func NewTestLogger(tb testing.TB) Logger {
 	return &testLogger{
-		T: t,
+		TB: tb,
 	}
 }
 
 func (t *testLogger) Print(v ...interface{}) {
-	t.T.Log(v...)
+	t.TB.Log(v...)
 }
 
 func (t *testLogger) Printf(format string, v ...interface{}) {
-	t.T.Logf(format, v...)
+	t.TB.Logf(format, v...)
 }
 
 func (t *testLogger) Fatal(v ...interface{}) {
-	t.T.Fatal(v...)
+	t.TB.Fatal(v...)
 }
 
 func (t *testLogger) Fatalf(format string, v ...interface{}) {
-	t.T.Fatalf(format, v...)
+	t.TB.Fatalf(format, v...)
 }
 
 func (t *testLogger) WithPrefix(s string) Logger {
 	return &testLogger{
-		T:      t.T,
+		TB:     t.TB,
 		prefix: t.prefix + s,
 	}
 }
