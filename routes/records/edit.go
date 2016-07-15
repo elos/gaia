@@ -15,9 +15,39 @@ import (
 	"golang.org/x/net/context"
 )
 
-const (
-	idParam = "id"
+const editTemplateRaw = `<html>
+	<body>
+		{{ with .Flash -}}
+			{{ . }}
+		{{- end }}
+
+		<form method="post">
+		{{ with .FormHTML }}
+			{{ . }}
+		{{ end }}
+			{{ with .SubmitText }}
+				<input type="submit" value="{{ . }}">
+			{{ else }}
+				<input type="submit" value="Save">
+			{{ end }}
+		</form>
+		{{ if and .Kind .ID }}
+		<a href="/records/view/?kind={{ .Kind }}&id={{ .ID }}"> View </a>
+		{{ end }}
+	</body>
+</html>`
+
+var EditTemplate = template.Must(
+	template.New("records/edit").Parse(editTemplateRaw),
 )
+
+type EditData struct {
+	Flash      string
+	FormHTML   template.HTML
+	SubmitText string
+
+	Kind, ID string
+}
 
 // EditGET handles a `GET` request to the `/records/edit/` route of the records web UI.
 //
@@ -119,6 +149,8 @@ func EditGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db dat
 	if err := EditTemplate.Execute(w, &EditData{
 		FormHTML:   template.HTML(string(b)),
 		SubmitText: "Update",
+		Kind:       k,
+		ID:         i,
 	}); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}

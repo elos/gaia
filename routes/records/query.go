@@ -27,30 +27,32 @@ const (
 const queryTemplateRaw = `
 <html>
 	<body>
-		<form id="queryForm" method="get">
+		<form method="get">
 			{{ .QueryFormHTML }}
+			<input type="submit" value="Query">
 		</form>
 		{{ with .Flash }} {{- . -}} {{ end }}
-		{{ if .Model }}
-			{{ $traits := .Model.Traits }}
+		{{ $model := .Model }}
+		{{ if $model }}
+			{{ $traits := $model.Traits }}
 			<table>
 				<thead>
 					<tr>
 					{{ range $traits }}
 						<th>{{ .Name }}</th>
 					{{ end }}
+					<th> Edit </th>
 					</tr>
 				</thead>
 				<tbody>
 					{{ range $record := .Records }}
 						<tr>
 						{{ range $traits }}
-						<td>
-							{{ index $record .Name }}
-						</td>
+						<td> {{ index $record .Name }} </td>
 						{{ else }}
-							<td>No Traits</td>
+						<td>No Traits</td>
 						{{ end }}
+						<td> <a href="/records/edit/?kind={{ $model.Kind }}&id={{ index $record "id" }}"> Edit </a> </td>
 						</tr>
 					{{ else }}
 						<tr><td>No records</td></tr>

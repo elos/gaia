@@ -15,35 +15,6 @@ import (
 	"golang.org/x/net/context"
 )
 
-const editTemplateRaw = `<html>
-	<body>
-		{{ with .Flash -}}
-			{{ . }}
-		{{- end }}
-
-		<form method="post">
-		{{ with .FormHTML }}
-			{{ . }}
-		{{ end }}
-			{{ with .SubmitText }}
-				<input type="submit" value="{{ . }}">
-			{{ else }}
-				<input type="submit" value="Save">
-			{{ end }}
-		</form>
-	</body>
-</html>`
-
-var EditTemplate = template.Must(
-	template.New("records/edit").Parse(editTemplateRaw),
-)
-
-type EditData struct {
-	Flash      string
-	FormHTML   template.HTML
-	SubmitText string
-}
-
 // CreateGET handles a `GET` request to the `/records/create/` route of the records web UI.
 //
 // Parameters:

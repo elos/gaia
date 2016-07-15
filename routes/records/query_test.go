@@ -120,11 +120,16 @@ func TestQueryGET(t *testing.T) {
 	t.Logf("resp.Body:\n%s", body)
 
 	contents := map[string]bool{
+		"Query":         true,
+		"5 results.":    true,
 		"event 1":       true,
 		"event 2":       true,
 		"event 3":       true,
 		"generic event": true,
-		"not owned":     false,
+		"Edit":          true,
+		"/records/edit/?kind=event&id=8": true,
+		"/records/edit/?kind=event&id=9": false,
+		"not owned":                      false,
 	}
 
 	for content, want := range contents {

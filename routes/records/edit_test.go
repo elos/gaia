@@ -85,6 +85,10 @@ func TestEditGET(t *testing.T) {
 	if got, want := bytes.Contains(body, []byte(`old name`)), true; got != want {
 		t.Fatalf("bytes.Contains(body, %q): got %t, want %t", "old name", got, want)
 	}
+
+	if got, want := bytes.Contains(body, []byte(`/records/view/?kind=event&id=3`)), true; got != want {
+		t.Fatalf("bytes.Contains(body, %q): got %t, want %t", `/records/view/?kind=event&id=3`, got, want)
+	}
 }
 
 func TestEditPOST(t *testing.T) {
