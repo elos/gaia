@@ -3,6 +3,7 @@ package gaia
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -173,12 +174,16 @@ func (db *DB) deleteRecord(r data.Record) error {
 	return nil
 }
 
-func (db *DB) query(k data.Kind, attrs data.AttrMap) (data.Iterator, error) {
+func (db *DB) query(q *query) (data.Iterator, error) {
 	url := db.recordQueryURL(url.Values{
-		"kind": []string{k.String()},
+		"kind":  []string{q.kind.String()},
+		"skip":  []string{fmt.Sprintf("%d", q.skip)},
+		"limit": []string{fmt.Sprintf("%d", q.limit)},
+		"batch": []string{fmt.Sprintf("%d", q.batch)},
+		"order": q.order,
 	})
 
-	resp, err := db.postJSON(url, attrs)
+	resp, err := db.postJSON(url, q.attrs)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +212,7 @@ func (db *DB) query(k data.Kind, attrs data.AttrMap) (data.Iterator, error) {
 		var results []data.Record
 
 		for _, attrs := range resultsUntyped {
-			r := models.ModelFor(k)
+			r := models.ModelFor(q.kind)
 
 			if err := transfer.TransferAttrs(attrs, r); err != nil {
 				return nil, err
@@ -299,9 +304,9 @@ func (db *DB) PopulateByID(r data.Record) error {
 }
 
 func (db *DB) PopulateByField(field string, value interface{}, r data.Record) error {
-	iter, err := db.query(r.Kind(), data.AttrMap{
+	iter, err := db.query(&query{kind: r.Kind(), attrs: data.AttrMap{
 		field: value,
-	})
+	}})
 
 	if err != nil {
 		return err
@@ -324,29 +329,35 @@ func (db *DB) Query(k data.Kind) data.Query {
 }
 
 type query struct {
-	kind  data.Kind
-	db    *DB
-	attrs data.AttrMap
+	kind               data.Kind
+	db                 *DB
+	attrs              data.AttrMap
+	skip, limit, batch int
+	order              []string
 }
 
 func (q *query) Execute() (data.Iterator, error) {
-	return q.db.query(q.kind, q.attrs)
+	return q.db.query(q)
 }
 
 func (q *query) Skip(i int) data.Query {
-	panic("")
+	q.skip = i
+	return q
 }
 
 func (q *query) Limit(i int) data.Query {
-	panic("")
+	q.limit = i
+	return q
 }
 
 func (q *query) Batch(i int) data.Query {
-	panic("")
+	q.batch = i
+	return q
 }
 
 func (q *query) Order(fields ...string) data.Query {
-	panic("")
+	q.order = fields
+	return q
 }
 
 func (q *query) Select(attrs data.AttrMap) data.Query {
