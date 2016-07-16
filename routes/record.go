@@ -580,7 +580,7 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 	kind := data.Kind(k)
 
 	// Verify the kind is recognized
-	if _, ok := models.Kinds[kind]; !ok {
+	if !models.Kinds[kind] {
 		l.Printf("unrecognized kind %q", kind)
 		http.Error(w, fmt.Sprintf("The kind %q is not recognized", kind), http.StatusBadRequest)
 		return
@@ -634,7 +634,7 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 
 	// Load our actual query
 	var iter data.Iterator
-	if iter, err = db.Query(kind).Select(attrs).Limit(limit).Batch(batch).Skip(skip).Execute(); err != nil {
+	if iter, err = db.Query(kind).Select(attrs).Limit(limit).Batch(batch).Skip(skip).Order(r.Form["order"]...).Execute(); err != nil {
 		l.Printf("db.Query(%q).Select(%v).Limit(%d).Batch(%d).Skip(%d) error: %s", kind, attrs, limit, batch, skip, err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
