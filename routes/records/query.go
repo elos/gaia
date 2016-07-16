@@ -81,6 +81,7 @@ type query struct {
 	Batch  int
 	Skip   int
 	Select map[string]interface{}
+	Order  []string
 }
 
 // QueryGET handles a `GET` request to the `/records/query/` route of the records web UI.
@@ -92,6 +93,7 @@ type query struct {
 //			query/Batch  int                    (optional)
 //			query/Skip   int                    (optional)
 //			query/Select map[string]interface{} (optional)
+//			query/Order  []string               (optional)
 //		}
 //
 // QueryGET first checks for a kind. If it recieves none, it returns a form to submit a query.
@@ -181,7 +183,7 @@ func QueryGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db da
 func execute(db data.DB, u *models.User, q *query) ([]map[string]interface{}, error) {
 	rs := make([]map[string]interface{}, 0)
 
-	iter, err := db.Query(q.Kind).Limit(q.Limit).Batch(q.Batch).Skip(q.Skip).Select(q.Select).Execute()
+	iter, err := db.Query(q.Kind).Limit(q.Limit).Batch(q.Batch).Skip(q.Skip).Select(q.Select).Order(q.Order...).Execute()
 	if err != nil {
 		return nil, err
 	}
