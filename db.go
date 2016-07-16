@@ -345,6 +345,10 @@ func (q *query) Batch(i int) data.Query {
 	panic("")
 }
 
+func (q *query) Order(fields ...string) data.Query {
+	panic("")
+}
+
 func (q *query) Select(attrs data.AttrMap) data.Query {
 	for k, v := range attrs {
 		q.attrs[k] = v
