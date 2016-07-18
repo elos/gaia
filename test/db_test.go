@@ -117,7 +117,7 @@ func TestDB(t *testing.T) {
 	}
 	t.Log("Query executed")
 
-	t.Log("Examining quert results")
+	t.Log("Examining query results")
 
 	result := models.NewTask()
 	iter.Next(result)
