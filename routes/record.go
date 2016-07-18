@@ -640,18 +640,30 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	fmt.Fprint(w, "[")
+
+	first := true
+
 	// Iterator through the results and write the response
-	results := make([]data.Record, 0)
 	m := models.ModelFor(kind)
 	for iter.Next(m) {
+		if !first {
+			fmt.Fprint(w, ",")
+		}
+		first = false
 		if ok, err := access.CanRead(db, u, m); err != nil {
 			// We've hit an error and need to bail
 			l.Printf("access.CanRead error: %s", err)
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		} else if ok {
-			results = append(results, m)
-			m = models.ModelFor(kind)
+			bytes, err := json.Marshal(m)
+			if err != nil {
+				l.Printf("error marshalling JSON: %s", err)
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+			w.Write(bytes)
 		}
 	}
 
@@ -661,16 +673,7 @@ func RecordQueryPOST(ctx context.Context, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	returnBody, err := json.MarshalIndent(results, "", "    ")
-	if err != nil {
-		l.Printf("error marshalling JSON: %s", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(returnBody)
+	fmt.Fprint(w, "]")
 }
 
 // --- }}}
