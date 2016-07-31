@@ -26,13 +26,17 @@ const (
 
 func main() {
 	var (
-		addr   = flag.String("addr", "0.0.0.0", "address to listen on")
-		port   = flag.Int("port", 80, "port to listen on")
-		dbtype = flag.String("dbtype", "mongo", "type of database to use: (mem or mongo)")
-		dbaddr = flag.String("dbaddr", "0.0.0.0", "address of database")
-		appdir = flag.String("appdir", "app", "directory of maia build")
-		db     data.DB
-		err    error
+		addr     = flag.String("addr", "0.0.0.0", "address to listen on")
+		port     = flag.Int("port", 80, "port to listen on")
+		dbtype   = flag.String("dbtype", "mongo", "type of database to use: (mem or mongo)")
+		dbaddr   = flag.String("dbaddr", "0.0.0.0", "address of database")
+		appdir   = flag.String("appdir", "app", "directory of maia build")
+		seed     = flag.String("seed", "", "directory containing seed data")
+		certFile = flag.String("certfile", "", "cert file")
+		keyFile  = flag.String("keyfile", "", "private keY")
+
+		db  data.DB
+		err error
 	)
 
 	flag.Parse()
@@ -52,6 +56,44 @@ func main() {
 		log.Fatal("Unrecognized database type: '%s'", *dbtype)
 	}
 	log.Printf("== Set up Database ==")
+	if *seed != "" {
+		/*
+			log.Printf("== Seeding Database ==")
+			bytes, err := ioutil.ReadFile(*seed)
+			if err != nil {
+				log.Fatalf("ioutil.ReadFile(%q) error: %s", *seed, err)
+			}
+
+			seeds := make(map[data.Kind][]interface{})
+			if err := json.Unmarshal(bytes, &seeds); err != nil {
+				log.Fatalf("json.Unmarshal(bytes, seeds) error: %s", err)
+			}
+
+			for k, ss := range seeds {
+				_, ok := models.Kinds[k]
+				if !ok {
+					log.Fatal("unrecognized kind: %q", k)
+				}
+
+				m := models.ModelFor(k)
+				for i := range ss {
+					transfer.TransferAttrs(i, m)
+					log.Print(m)
+					if err := db.Save(m); err != nil {
+						log.Fatalf("db.Save(m) error: %s", err)
+					}
+					m = models.ModelFor(k)
+				}
+			}
+			log.Printf("== Seeded Database ==")
+		*/
+	} else {
+		log.Printf("\tno seed")
+	}
+
+	if _, _, err := user.Create(db, "u", "p"); err != nil {
+		log.Fatal("user.Create error: %s", err)
+	}
 
 	background := context.Background()
 
@@ -93,8 +135,15 @@ func main() {
 	log.Printf("== Starting HTTP Server ==")
 	host := fmt.Sprintf("%s:%d", *addr, *port)
 	log.Printf("\tServing on %s", host)
-	if err = http.ListenAndServe(host, g); err != nil {
-		log.Fatal(err)
+	if *certFile != "" && *keyFile != "" {
+		if err = http.ListenAndServeTLS(host, *certFile, *keyFile, g); err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		log.Print("NOT SERVING TLS")
+		if err = http.ListenAndServe(host, g); err != nil {
+			log.Fatal(err)
+		}
 	}
 	log.Printf("== Started HTTP Server ==")
 }
