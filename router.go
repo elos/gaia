@@ -276,7 +276,7 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 		}
 	}, s.Logger))
 
-	fs := http.FileServer(http.Dir("/var/www/elos/.well-known/"))
+	fs := http.FileServer(http.Dir("/var/www/elos/"))
 
 	mux.Handle("/.well-known/", logRequest(func(w http.ResponseWriter, r *http.Request) {
 		log.Print("matched")
