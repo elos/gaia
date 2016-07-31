@@ -274,7 +274,7 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 		}
 	}, s.Logger))
 
-	mux.Handle("/.well-known", http.FileServer(http.Dir("/var/www/elos")))
+	mux.Handle("/.well-known/", http.FileServer(http.Dir("/var/www/elos/.well-known/")))
 
 	return mux, cancelAll
 }
