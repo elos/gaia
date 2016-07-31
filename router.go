@@ -1,6 +1,7 @@
 package gaia
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/elos/gaia/routes"
@@ -47,6 +48,7 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 	mux.HandleFunc(routes.Index, logRequest(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
+			log.Print("index")
 			ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
 			if !ok {
 				return
