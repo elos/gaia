@@ -276,7 +276,12 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 		}
 	}, s.Logger))
 
-	mux.Handle("/.well-known/", http.FileServer(http.Dir("/var/www/elos/.well-known/")))
+	fs := http.FileServer(http.Dir("/var/www/elos/.well-known/"))
+
+	mux.Handle("/.well-known/", logRequest(func(w http.ResponseWriter, r *http.Request) {
+		log.Print("matched")
+		fs.ServeHTTP(w, r)
+	}, s.Logger))
 
 	return mux, cancelAll
 }
