@@ -136,11 +136,18 @@ func main() {
 	host := fmt.Sprintf("%s:%d", *addr, *port)
 	log.Printf("\tServing on %s", host)
 	if *certFile != "" && *keyFile != "" {
+		if *port != 443 {
+			log.Print("WARNING: serving HTTPS on a port that isn't 443")
+		}
+
 		if err = http.ListenAndServeTLS(host, *certFile, *keyFile, g); err != nil {
 			log.Fatal(err)
 		}
 	} else {
-		log.Print("NOT SERVING TLS")
+		log.Print("NOT SERVING SECURELY")
+		if *port != 80 {
+			log.Print("WARNING: serving HTTP on a port that isn't 80")
+		}
 		if err = http.ListenAndServe(host, g); err != nil {
 			log.Fatal(err)
 		}
