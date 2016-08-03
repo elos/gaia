@@ -2,7 +2,7 @@
 
 set -e
 
-#make ubuntu
-git add --all
+make ubuntu
+git add ./
 git commit -m "releasing gaia [release.sh]"
 git push
