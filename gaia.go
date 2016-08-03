@@ -17,6 +17,7 @@ type Services struct {
 	services.SMSCommandSessions
 	services.WebCommandSessions
 	services.AppFileSystem
+	services.WebUIClient
 }
 
 type Gaia struct {

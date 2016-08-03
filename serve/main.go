@@ -4,8 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
+
+	"google.golang.org/grpc"
 
 	"github.com/elos/data"
 	"github.com/elos/data/builtin/mem"
@@ -14,6 +17,9 @@ import (
 	"github.com/elos/gaia/services"
 	"github.com/elos/models"
 	"github.com/elos/models/user"
+	"github.com/elos/x/auth"
+	xdata "github.com/elos/x/data"
+	"github.com/elos/x/records"
 	"github.com/subosito/twilio"
 	"golang.org/x/net/context"
 )
@@ -91,6 +97,60 @@ func main() {
 		log.Printf("\tno seed")
 	}
 
+	// DB SERVER
+	lis, err := net.Listen("tcp", ":1111")
+	if err != nil {
+		log.Fatalf("failed to listen on :1111: %v", err)
+	}
+	g := grpc.NewServer()
+	xdata.RegisterDBServer(g, xdata.NewDBServer(db))
+	go g.Serve(lis)
+
+	// DB CLIENT
+	conn, err := grpc.Dial(":1111", grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("failed to dial: %v", err)
+	}
+	defer conn.Close()
+	dbclient := xdata.NewDBClient(conn)
+
+	// AUTH SERVER
+	lis, err = net.Listen("tcp", ":1112")
+	if err != nil {
+		log.Fatalf("failed to listen on :1112: %v", err)
+	}
+	g = grpc.NewServer()
+	auth.RegisterAuthServer(g, auth.NewServer(dbclient))
+	go g.Serve(lis)
+
+	// AUTH CLIENT
+	conn, err = grpc.Dial(":1112", grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("failed to dial: %v", err)
+	}
+	defer conn.Close()
+	authclient := auth.NewAuthClient(conn)
+
+	// WEBUI SERVER
+	lis, err = net.Listen("tcp", ":1113")
+	if err != nil {
+		log.Fatalf("failed to listen on :1113: %v", err)
+	}
+	g = grpc.NewServer()
+	records.RegisterWebUIServer(
+		g,
+		records.NewWebUI(dbclient, authclient),
+	)
+	go g.Serve(lis)
+
+	// WEB UI CLIENT
+	conn, err = grpc.Dial(":1113", grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("failed to dial: %v", err)
+	}
+	defer conn.Close()
+	webuiclient := records.NewWebUIClient(conn)
+
 	if _, _, err := user.Create(db, "u", "p"); err != nil {
 		log.Fatal("user.Create error: %s", err)
 	}
@@ -111,7 +171,7 @@ func main() {
 	log.Printf("== Started SMS Command Sessions ==")
 
 	log.Printf("== Initiliazing Gaia Core ==")
-	g := gaia.New(
+	ga := gaia.New(
 		context.Background(),
 		new(gaia.Middleware),
 		&gaia.Services{
@@ -119,6 +179,7 @@ func main() {
 			SMSCommandSessions: smsMux,
 			DB:                 db,
 			Logger:             services.NewLogger(os.Stderr),
+			WebUIClient:        webuiclient,
 		},
 	)
 	log.Printf("== Initiliazed Gaia Core ==")
@@ -140,7 +201,7 @@ func main() {
 			log.Print("WARNING: serving HTTPS on a port that isn't 443")
 		}
 
-		if err = http.ListenAndServeTLS(host, *certFile, *keyFile, g); err != nil {
+		if err = http.ListenAndServeTLS(host, *certFile, *keyFile, ga); err != nil {
 			log.Fatal(err)
 		}
 	} else {
@@ -148,7 +209,7 @@ func main() {
 		if *port != 80 {
 			log.Print("WARNING: serving HTTP on a port that isn't 80")
 		}
-		if err = http.ListenAndServe(host, g); err != nil {
+		if err = http.ListenAndServe(host, ga); err != nil {
 			log.Fatal(err)
 		}
 	}

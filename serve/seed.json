@@ -1,0 +1,17 @@
+{
+    "user": [
+        {
+            "id": "1",
+            "credentials_ids": ["2"]
+        }
+    ],
+    "credential": [
+        {
+            "id": "2",
+            "owner_id": "1",
+            "spec": "password",
+            "public": "u",
+            "private": "p"
+        }
+    ]
+}

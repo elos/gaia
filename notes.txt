@@ -1,0 +1,12 @@
+ * cal command
+ * Bring back the idea of an elos routine
+ * Get HTTPS working
+ * add checkpoints for elos tasks
+ * /record/ should add the user owner_id if possible
+ * Pressing enter in name field should save task
+
+
+
+
+
+
