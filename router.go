@@ -145,9 +145,9 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 	mux.HandleFunc(routes.Register, logRequest(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
-			routes.RegisterPOST(requestBackground, w, r, s.DB, s.Logger)
+			routes.RegisterPOST(requestBackground, w, r, s.DB, s.Logger, s.WebUIClient)
 		case "GET":
-			routes.RegisterGET(requestBackground, w, r, s.DB, s.Logger)
+			routes.RegisterGET(requestBackground, w, r, s.DB, s.Logger, s.WebUIClient)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
