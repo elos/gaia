@@ -10,20 +10,15 @@ else
 	echo "No server running"
 fi
 
-echo "Navigating to github.com directory"
-cd ~/go/src/github.com/
-echo "Removing all elos dirs"
-rm -rf elos
-echo "Getting gaia"
-go get github.com/elos/gaia
-echo "Getting models"
-go get github.com/elos/models
-echo "Going to serve dir"
-cd elos/gaia/serve/
-echo "Building"
-go build main.go
-echo "Starting"
-sudo ./main -dbtype=mongo -dbaddr=localhost:27017 -appdir=/home/ubuntu/go/src/github.com/elos/gaia/app -certfile=/etc/letsencrypt/live/elos.pw/cert.pem -keyfile=/etc/letsencrypt/live/elos.pw/privkey.pem -port=443 > ~/stdout.txt 2> ~/stderr.txt &
+if [ -e gaia ]; then
+	echo "Removing gaia"
+	rm gaia
+fi
+
+echo "Downloading gaia"
+wget https://github.com/elos/gaia/blob/master/serve/build/linux/gaia?raw=true -O gaia
+chmod +x gaia
+sudo ./gaia -dbtype=mongo -dbaddr=localhost:27017 -appdir=/home/ubuntu/go/src/github.com/elos/gaia/app -certfile=/etc/letsencrypt/live/elos.pw/fullchain.pem -keyfile=/etc/letsencrypt/live/elos.pw/privkey.pem -port=443 > ~/stdout.txt 2> ~/stderr.txt &
 #sudo ./main -dbtype=mongo -dbaddr=localhost:27017 -appdir=/home/ubuntu/go/src/github.com/elos/gaia/app > ~/stdout.txt 2> ~/stderr.txt &
 echo "Writing pid file"
 echo $! > ~/server.pid
