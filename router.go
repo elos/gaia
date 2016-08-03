@@ -53,7 +53,7 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 			if !ok {
 				return
 			}
-			routes.RegisterGET(ctx, w, r, s.DB, s.Logger)
+			routes.RegisterGET(ctx, w, r, s.DB, s.Logger, s.WebUIClient)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
@@ -166,7 +166,7 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 
 			routes.LoginPOST(ctx, w, r, s.DB, s.Logger)
 		case "GET":
-			routes.LoginGET(requestBackground, w, r, s.DB, s.Logger)
+			routes.LoginGET(requestBackground, w, r, s.DB, s.Logger, s.WebUIClient)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return

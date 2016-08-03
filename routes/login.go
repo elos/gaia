@@ -2,12 +2,12 @@ package routes
 
 import (
 	"net/http"
-	"text/template"
 
 	"github.com/elos/data"
 	"github.com/elos/gaia/services"
 	"github.com/elos/models"
 	"github.com/elos/models/user"
+	"github.com/elos/x/records"
 	"golang.org/x/net/context"
 )
 
@@ -34,7 +34,6 @@ func session(r *http.Request, db data.DB) (*models.Session, error) {
 
 func LoginPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
 	l := logger.WithPrefix("LoginPOST: ")
-
 	u, ok := user.FromContext(ctx)
 	if !ok {
 		l.Print("failed to retrieve user from context")
@@ -55,32 +54,13 @@ func LoginPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db d
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-const loginTemplateRaw = `
-<html>
-	<body>
-		<form method="post">
-			<fieldset>
-				<legend>Login:</legend>
-				<input type="text" name="public"  placeholder="public"  />
-				<input type="text" name="private" placeholder="private" />
-				<input type="submit" />
-			</fieldset>
-		</form>
-		<a href="/register/">Register</a>
-	</body>
-</html>
-`
-
-var loginTemplate = template.Must(template.New("login").Parse(loginTemplateRaw))
-
-func LoginGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
-	l := logger.WithPrefix("LoginGET: ")
-
-	if err := loginTemplate.Execute(w, nil); err != nil {
-		l.Fatal(err)
+func LoginGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger, webui services.WebUIClient) {
+	resp, err := webui.LoginGET(ctx, new(records.LoginGETRequest))
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
 	}
-}
 
-func AppHomeGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
-	// l := logger.WithPrefix("AppHomeGET: ")
+	w.WriteHeader(int(resp.Code))
+	w.Write(resp.Body)
 }
