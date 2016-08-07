@@ -19,6 +19,8 @@ import (
 	"github.com/elos/models/user"
 	"github.com/elos/x/auth"
 	xdata "github.com/elos/x/data"
+	"github.com/elos/x/data/access"
+	"github.com/elos/x/data/external"
 	"github.com/elos/x/records"
 	"github.com/subosito/twilio"
 	"golang.org/x/net/context"
@@ -130,6 +132,18 @@ func main() {
 	}
 	defer conn.Close()
 	authclient := auth.NewAuthClient(conn)
+
+	// external db!!
+	lis, err = net.Listen("tcp", ":10000")
+	if err != nil {
+		log.Fatalf("failed to listen on :10000")
+	}
+	g = grpc.NewServer()
+	xdata.RegisterDBServer(
+		g,
+		external.DB(db, access.NewLocalClient(), authclient),
+	)
+	go g.Serve(lis)
 
 	// WEBUI SERVER
 	lis, err = net.Listen("tcp", ":1113")
