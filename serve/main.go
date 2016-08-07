@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/elos/data"
 	"github.com/elos/data/builtin/mem"
@@ -138,12 +139,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen on :10000")
 	}
-	/*tc, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
+	tc, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 	if err != nil {
 		log.Fatal("crednetials.NewServerTLSFromFile error: %v", err)
-	}*/
+	}
 
-	g = grpc.NewServer( /*grpc.Creds(tc)*/ )
+	g = grpc.NewServer(grpc.Creds(tc))
 	xdata.RegisterDBServer(
 		g,
 		external.DB(db, access.NewLocalClient(), authclient),
