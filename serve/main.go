@@ -144,7 +144,7 @@ func main() {
 		log.Fatal("crednetials.NewServerTLSFromFile error: %v", err)
 	}
 
-	g = grpc.NewServer(grpc.Creds(tc))
+	g = grpc.NewServer( /*grpc.Creds(tc)*/ )
 	xdata.RegisterDBServer(
 		g,
 		external.DB(db, access.NewLocalClient(), authclient),
