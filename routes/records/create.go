@@ -1,17 +1,14 @@
 package records
 
 import (
-	"fmt"
-	"html/template"
+	"io/ioutil"
 	"net/http"
-	"net/url"
+	"strings"
 
 	"github.com/elos/data"
-	"github.com/elos/gaia/routes/records/form"
 	"github.com/elos/gaia/services"
-	"github.com/elos/models"
-	"github.com/elos/models/access"
-	"github.com/elos/models/user"
+	xmodels "github.com/elos/x/models"
+	"github.com/elos/x/records"
 	"golang.org/x/net/context"
 )
 
@@ -38,7 +35,7 @@ import (
 //			- error parsing form
 //			- error marshalling model into form
 //			- EditTemplate.Execute error
-func CreateGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, l services.Logger) {
+func CreateGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, l services.Logger, webui services.WebUIClient) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -49,33 +46,17 @@ func CreateGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db d
 		http.Error(w, "Missing parameter: \"kind\"", http.StatusBadRequest)
 		return
 	}
-	kind := data.Kind(k)
 
-	if !models.Kinds[kind] {
-		http.Error(w, fmt.Sprintf("Unrecognized kind: %q", k), http.StatusBadRequest)
-		return
-	}
-
-	m := models.ModelFor(kind)
-
-	if _, ok := m.(access.Property); !ok {
+	resp, err := webui.CreateGET(ctx, &records.CreateGETRequest{
+		Kind: xmodels.Kind(xmodels.Kind_value[strings.ToUpper(k)]),
+	})
+	if err != nil {
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
 	}
 
-	b, err := form.Marshal(m, k)
-	if err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	if err := EditTemplate.Execute(w, &EditData{
-		Flash:      "The record has not yet been created, you must save",
-		FormHTML:   template.HTML(string(b)),
-		SubmitText: "Create",
-	}); err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-	}
+	w.WriteHeader(int(resp.Code))
+	w.Write(resp.Body)
 }
 
 // CreatePOST handles a `POST` request to the `/records/create/` route of the records web UI.
@@ -106,67 +87,23 @@ func CreateGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db d
 //			- ctx missing user
 //			- access.CanCreate error
 //			- db.Save error
-func CreatePOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, l services.Logger) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	k := r.FormValue("kind")
-	if k == "" {
-		http.Error(w, "Missing parameter \"kind\"", http.StatusBadRequest)
-		return
-	}
-	kind := data.Kind(k)
-
-	if !models.Kinds[kind] {
-		http.Error(w, fmt.Sprintf("Unrecognized kind: %q", k), http.StatusBadRequest)
-		return
-	}
-
-	m := models.ModelFor(kind)
-	if err := form.Unmarshal(r.Form, m, kind.String()); err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-	if m.ID().String() == "" {
-		m.SetID(db.NewID())
-	}
-
-	u, ok := user.FromContext(ctx)
-	if !ok {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	prop, ok := m.(access.Property)
-	if !ok {
-		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-		return
-	}
-
-	ok, err := access.CanCreate(db, u, prop)
+func CreatePOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, l services.Logger, webui services.WebUIClient) {
+	defer r.Body.Close()
+	bytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-		return
-	}
-
-	if !ok {
-		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-		return
-	}
-
-	if err := db.Save(m); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	http.Redirect(
-		w, r,
-		"/records/view/?"+url.Values{
-			"kind": []string{m.Kind().String()},
-			"id":   []string{m.ID().String()},
-		}.Encode(),
-		http.StatusFound,
-	)
+	resp, err := webui.CreatePOST(ctx, &records.CreatePOSTRequest{
+		Url:  r.URL.String(),
+		Body: bytes,
+	})
+
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	resp.ServeHTTP(w, r)
 }

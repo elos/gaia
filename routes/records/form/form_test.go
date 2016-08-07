@@ -26,8 +26,13 @@ func TestMarshal(t *testing.T) {
 			structure: time.Unix(1136214245, 0),
 			output:    `<label for="time.Time">time.Time</label><input name="time.Time" type="datetime-local" value="2006-01-02T07:04:05-08:00" />`,
 		},
-
 		// Primitives
+		// Byte (reflect.Kind == Uint8)
+		{
+			name:      "byte",
+			structure: byte(2),
+			output:    `<label for="byte">byte</label><input name="byte" type="number" value="2" />`,
+		},
 		// Bool
 		{
 			name:      "bool_true",
@@ -138,6 +143,11 @@ func TestMarshal(t *testing.T) {
 	"tod"
 ]</textarea>
 			`),
+		},
+		{
+			name:      "[]byte",
+			structure: []byte{1, 2, 3, 4, 5},
+			output:    "",
 		},
 		// Maps
 		{
@@ -343,6 +353,14 @@ func TestUnmarshal(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "byte",
+			values: url.Values{
+				"byte": []string{"2"},
+			},
+			into: new(byte),
+			want: byte(2),
+		},
+		{
 			name: "uint8",
 			values: url.Values{
 				"uint8": []string{"8"},
@@ -449,13 +467,21 @@ func TestUnmarshal(t *testing.T) {
 
 		// Composites
 		/*
-			{
-				name: "[]int",
-				values: url.Values{
-					"[]int": []string{"[1,2,3]"},
+				{
+					name: "[]int",
+					values: url.Values{
+						"[]int": []string{"[1,2,3]"},
+					},
+					into: make([]int, 0),
+					want: []int{1, 2, 3},
 				},
-				into: make([]int, 0),
-				want: []int{1, 2, 3},
+			{
+				name: "[]byte",
+				values: url.Values{
+					"[]byte": []string{"AQIDBAU="},
+				},
+				into: make([]byte, 0),
+				want: []byte{1, 2, 3, 4, 5},
 			},
 		*/
 		{

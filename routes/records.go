@@ -15,8 +15,8 @@ import (
 var Records = struct {
 	QueryGET   func(context.Context, http.ResponseWriter, *http.Request, data.DB, services.Logger)
 	NewGET     func(context.Context, http.ResponseWriter, *http.Request, data.DB, services.Logger)
-	CreateGET  func(context.Context, http.ResponseWriter, *http.Request, data.DB, services.Logger)
-	CreatePOST func(context.Context, http.ResponseWriter, *http.Request, data.DB, services.Logger)
+	CreateGET  func(context.Context, http.ResponseWriter, *http.Request, data.DB, services.Logger, services.WebUIClient)
+	CreatePOST func(context.Context, http.ResponseWriter, *http.Request, data.DB, services.Logger, services.WebUIClient)
 	EditGET    func(context.Context, http.ResponseWriter, *http.Request, data.DB, services.Logger)
 	EditPOST   func(context.Context, http.ResponseWriter, *http.Request, data.DB, services.Logger)
 	ViewGET    func(context.Context, http.ResponseWriter, *http.Request, data.DB, services.Logger)

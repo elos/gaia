@@ -100,9 +100,9 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 
 		switch r.Method {
 		case "GET":
-			routes.Records.CreateGET(ctx, w, r, s.DB, s.Logger)
+			routes.Records.CreateGET(ctx, w, r, s.DB, s.Logger, s.WebUIClient)
 		case "POST":
-			routes.Records.CreatePOST(ctx, w, r, s.DB, s.Logger)
+			routes.Records.CreatePOST(ctx, w, r, s.DB, s.Logger, s.WebUIClient)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
