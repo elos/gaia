@@ -19,8 +19,6 @@ import (
 	"github.com/elos/models/user"
 	"github.com/elos/x/auth"
 	xdata "github.com/elos/x/data"
-	"github.com/elos/x/data/access"
-	"github.com/elos/x/data/external"
 	"github.com/elos/x/records"
 	"github.com/subosito/twilio"
 	"golang.org/x/net/context"
@@ -133,22 +131,24 @@ func main() {
 	defer conn.Close()
 	authclient := auth.NewAuthClient(conn)
 
-	// external db!!
-	lis, err = net.Listen("tcp", ":10000")
-	if err != nil {
-		log.Fatalf("failed to listen on :10000")
-	}
-	/*tc, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
-	if err != nil {
-		log.Fatal("crednetials.NewServerTLSFromFile error: %v", err)
-	}*/
+	/*
+		// external db!!
+		lis, err = net.Listen("tcp", ":10000")
+		if err != nil {
+			log.Fatalf("failed to listen on :10000")
+		}
+		tc, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
+		if err != nil {
+			log.Fatal("crednetials.NewServerTLSFromFile error: %v", err)
+		}
 
-	g = grpc.NewServer( /*grpc.Creds(tc)*/ )
-	xdata.RegisterDBServer(
-		g,
-		external.DB(db, access.NewLocalClient(), authclient),
-	)
-	go g.Serve(lis)
+		g = grpc.NewServer( grpc.Creds(tc) )
+		xdata.RegisterDBServer(
+			g,
+			external.NewDB(db, access.NewLocalClient(), authclient),
+		)
+		go g.Serve(lis)
+	*/
 
 	// WEBUI SERVER
 	lis, err = net.Listen("tcp", ":1113")
