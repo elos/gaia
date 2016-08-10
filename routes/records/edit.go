@@ -1,17 +1,15 @@
 package records
 
 import (
-	"fmt"
 	"html/template"
+	"io/ioutil"
+	"log"
 	"net/http"
-	"net/url"
 
-	"github.com/elos/data"
-	"github.com/elos/gaia/routes/records/form"
 	"github.com/elos/gaia/services"
-	"github.com/elos/models"
-	"github.com/elos/models/access"
-	"github.com/elos/models/user"
+	"github.com/elos/x/auth"
+	"github.com/elos/x/models"
+	"github.com/elos/x/records"
 	"golang.org/x/net/context"
 )
 
@@ -79,81 +77,22 @@ type EditData struct {
 //			- access.CanWrite error
 //			- form.Marshal error
 //			- EditTemplate.Execute error
-func EditGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
+func EditGET(ctx context.Context, w http.ResponseWriter, r *http.Request, webui services.WebUIClient) {
+	pu, pr := auth.CredentialsFromRequest(r)
 
-	k := r.FormValue("kind")
-	if k == "" {
-		http.Error(w, "Missing parameter \"kind\"", http.StatusBadRequest)
-		return
-	}
-	kind := data.Kind(k)
-
-	if !models.Kinds[kind] {
-		http.Error(w, fmt.Sprintf("Unrecognized kind: %q", k), http.StatusBadRequest)
-		return
-	}
-
-	i := r.FormValue("id")
-	if i == "" {
-		http.Error(w, "Missing parameter \"id\"", http.StatusBadRequest)
-		return
-	}
-
-	id, err := db.ParseID(i)
+	resp, err := webui.EditGET(ctx, &records.EditGETRequest{
+		Public:  pu,
+		Private: pr,
+		Kind:    models.Kind(models.Kind_value[r.FormValue("kind")]),
+		Id:      r.FormValue("id"),
+	})
 	if err != nil {
-		http.Error(w, "Invalid \"id\"", http.StatusBadRequest)
-		return
-	}
-
-	m := models.ModelFor(kind)
-	m.SetID(id)
-	switch err := db.PopulateByID(m); err {
-	case data.ErrNotFound:
-		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-		return
-	default:
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-
-	case nil:
-	}
-
-	u, ok := user.FromContext(ctx)
-	if !ok {
+		log.Printf("webui.EditGET error: %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	ok, err = access.CanWrite(db, u, m)
-
-	if err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	if !ok {
-		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-		return
-	}
-
-	b, err := form.Marshal(m, k)
-	if err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	if err := EditTemplate.Execute(w, &EditData{
-		FormHTML:   template.HTML(string(b)),
-		SubmitText: "Update",
-		Kind:       k,
-		ID:         i,
-	}); err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-	}
+	resp.ServeHTTP(w, r)
 }
 
 // EditPOST handles a `POST` request to the `/records/edit/` routes of the records web UI.
@@ -190,87 +129,28 @@ func EditGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db dat
 //			- ctx missing user
 //			- access.CanWrite error
 //			- db.Save error
-func EditPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
+func EditPOST(ctx context.Context, w http.ResponseWriter, r *http.Request, webui services.WebUIClient) {
+	pu, pr := auth.CredentialsFromRequest(r)
 
-	k := r.FormValue("kind")
-	if k == "" {
-		http.Error(w, "Missing parameter \"kind\"", http.StatusBadRequest)
-		return
-	}
-	kind := data.Kind(k)
-
-	if !models.Kinds[kind] {
-		http.Error(w, fmt.Sprintf("Unrecognized kind: %q", k), http.StatusBadRequest)
-		return
-	}
-
-	i := r.FormValue("id")
-	if i == "" {
-		http.Error(w, "Missing parameter \"id\"", http.StatusBadRequest)
-		return
-	}
-
-	id, err := db.ParseID(i)
-	if err != nil {
-		http.Error(w, "Invalid \"id\"", http.StatusBadRequest)
-		return
-	}
-
-	m := models.ModelFor(kind)
-	m.SetID(id)
-	if err := db.PopulateByID(m); err != nil {
-		if err == data.ErrNotFound {
-			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-			return
-		}
-
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	if err := form.Unmarshal(r.Form, m, k); err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	u, ok := user.FromContext(ctx)
-	if !ok {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	prop, ok := m.(access.Property)
-	if !ok {
-		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-		return
-	}
-
-	ok, err = access.CanWrite(db, u, prop)
+	defer r.Body.Close()
+	bytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	if !ok {
-		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-		return
-	}
+	resp, err := webui.EditPOST(ctx, &records.EditPOSTRequest{
+		Public:  pu,
+		Private: pr,
+		Url:     r.URL.String(),
+		Body:    bytes,
+	})
 
-	if err := db.Save(m); err != nil {
+	if err != nil {
+		log.Printf("webui.EditPOST error: %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	http.Redirect(
-		w, r,
-		"/records/view/?"+url.Values{
-			"kind": []string{m.Kind().String()},
-			"id":   []string{m.ID().String()},
-		}.Encode(),
-		http.StatusFound,
-	)
+	resp.ServeHTTP(w, r)
 }

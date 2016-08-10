@@ -1,16 +1,15 @@
 package records
 
 import (
-	"fmt"
+	"log"
 	"net/http"
+	"strings"
 	"text/template"
 
-	"github.com/elos/data"
-	"github.com/elos/data/transfer"
 	"github.com/elos/gaia/services"
-	"github.com/elos/models"
-	"github.com/elos/models/access"
-	"github.com/elos/models/user"
+	"github.com/elos/x/auth"
+	"github.com/elos/x/models"
+	"github.com/elos/x/records"
 	"golang.org/x/net/context"
 )
 
@@ -76,85 +75,21 @@ type ViewData struct {
 //			- access.CanRead error
 //			- transfer.TransferAttrs error
 //			- ViewTemplate.Execute error (by 3 paths)
-func ViewGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
+func ViewGET(ctx context.Context, w http.ResponseWriter, r *http.Request, webui services.WebUIClient) {
+	pu, pr := auth.CredentialsFromRequest(r)
 
-	k := r.FormValue("kind")
-	if k == "" {
-		http.Error(w, "Missing parameter \"kind\"", http.StatusBadRequest)
-		return
-	}
-	kind := data.Kind(k)
+	resp, err := webui.ViewGET(ctx, &records.ViewGETRequest{
+		Public:  pu,
+		Private: pr,
+		Kind:    models.Kind(models.Kind_value[strings.ToUpper(r.FormValue("kind"))]),
+		Id:      r.FormValue("id"),
+	})
 
-	if !models.Kinds[kind] {
-		http.Error(w, fmt.Sprintf("Unrecognized kind: %q", k), http.StatusBadRequest)
-		return
-	}
-
-	i := r.FormValue("id")
-	if i == "" {
-		http.Error(w, "Missing parameter \"id\"", http.StatusBadRequest)
-		return
-	}
-
-	id, err := db.ParseID(i)
 	if err != nil {
-		http.Error(w, "Invalid \"id\"", http.StatusBadRequest)
-		return
-	}
-
-	m := models.ModelFor(kind)
-	m.SetID(id)
-	if err := db.PopulateByID(m); err != nil {
-		if err == data.ErrNotFound {
-			w.WriteHeader(http.StatusNotFound)
-			if err := ViewTemplate.Execute(w, &ViewData{
-				Flash: fmt.Sprintf("(%s, %d) was not found", k, i),
-			}); err != nil {
-				http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-			}
-			return
-		}
-
+		log.Printf("webui.ViewGET error: %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	u, ok := user.FromContext(ctx)
-	if !ok {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	ok, err = access.CanRead(db, u, m)
-	if err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	if !ok {
-		w.WriteHeader(http.StatusNotFound)
-		if err := ViewTemplate.Execute(w, &ViewData{
-			Flash: fmt.Sprintf("(%s, %d) was not found", k, i),
-		}); err != nil {
-			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-		}
-	}
-
-	attrMap := make(map[string]interface{})
-	if err := transfer.TransferAttrs(m, &attrMap); err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	if err := ViewTemplate.Execute(w, &ViewData{
-		Kind:   k,
-		ID:     i,
-		Record: attrMap,
-	}); err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-	}
+	resp.ServeHTTP(w, r)
 }

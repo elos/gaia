@@ -1,18 +1,19 @@
 package records
 
 import (
-	"fmt"
 	"html/template"
+	"io/ioutil"
+	"log"
 	"net/http"
 
 	"github.com/elos/data"
 	"github.com/elos/data/transfer"
-	"github.com/elos/gaia/routes/records/form"
 	"github.com/elos/gaia/services"
 	"github.com/elos/metis"
 	"github.com/elos/models"
 	"github.com/elos/models/access"
-	"github.com/elos/models/user"
+	"github.com/elos/x/auth"
+	"github.com/elos/x/records"
 	"golang.org/x/net/context"
 )
 
@@ -114,64 +115,30 @@ type query struct {
 //			- QueryTemplate.Execute error (by 3 paths)
 //			- ctx missing user
 //			- execute error
-func QueryGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
+func QueryGET(ctx context.Context, w http.ResponseWriter, r *http.Request, webui services.WebUIClient) {
+	pu, pr := auth.CredentialsFromRequest(r) // parses form
 
-	q := new(query)
-	if err := form.Unmarshal(r.Form, q, "query"); err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	formbytes, err := form.Marshal(q, "query")
+	defer r.Body.Close()
+	bytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	if q.Kind == data.Kind("") {
-		if QueryTemplate.Execute(w, &QueryData{
-			Flash:         "Missing kind",
-			QueryFormHTML: template.HTML(string(formbytes)),
-		}); err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		}
-		return
-	}
+	resp, err := webui.QueryGET(ctx, &records.QueryGETRequest{
+		Public:  pu,
+		Private: pr,
+		Url:     r.URL.String(),
+		Body:    bytes,
+	})
 
-	if !models.Kinds[q.Kind] {
-		if QueryTemplate.Execute(w, &QueryData{
-			Flash:         "Invalid kind",
-			QueryFormHTML: template.HTML(string(formbytes)),
-		}); err != nil {
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		}
-		return
-	}
-
-	u, ok := user.FromContext(ctx)
-	if !ok {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	rs, err := execute(db, u, q)
 	if err != nil {
+		log.Printf("webui.QueryPOST error: %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	if err := QueryTemplate.Execute(w, &QueryData{
-		Flash:         fmt.Sprintf("%d results.", len(rs)),
-		QueryFormHTML: template.HTML(string(formbytes)),
-		Model:         models.Metis[q.Kind],
-		Records:       rs,
-	}); err != nil {
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-	}
+	resp.ServeHTTP(w, r)
 }
 
 // execute retrieves the records matching a *query, which the user can read, and marshals them to attr maps.

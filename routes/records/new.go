@@ -1,6 +1,7 @@
 package records
 
 import (
+	"log"
 	"net/http"
 	"text/template"
 
@@ -8,6 +9,8 @@ import (
 	"github.com/elos/gaia/services"
 	"github.com/elos/metis"
 	"github.com/elos/models"
+	"github.com/elos/x/auth"
+	"github.com/elos/x/records"
 	"golang.org/x/net/context"
 )
 
@@ -67,10 +70,19 @@ func init() {
 // Errors:
 //		* StatusInternalServerError
 //			- NewTemplate.Execute error
-func NewGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, logger services.Logger) {
-	if err := NewTemplate.Execute(w, &NewData{
-		Models: instantiableModels,
-	}); err != nil {
+func NewGET(ctx context.Context, w http.ResponseWriter, r *http.Request, webui services.WebUIClient) {
+	pu, pr := auth.CredentialsFromRequest(r)
+
+	resp, err := webui.NewGET(ctx, &records.NewGETRequest{
+		Public:  pu,
+		Private: pr,
+	})
+
+	if err != nil {
+		log.Printf("webui.NewGET error: %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
 	}
+
+	resp.ServeHTTP(w, r)
 }

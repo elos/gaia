@@ -2,9 +2,9 @@ package records
 
 import (
 	"io/ioutil"
+	"log"
 	"net/http"
 
-	"github.com/elos/data"
 	"github.com/elos/gaia/services"
 	"github.com/elos/x/auth"
 	"github.com/elos/x/models"
@@ -35,7 +35,7 @@ import (
 //			- error parsing form
 //			- error marshalling model into form
 //			- EditTemplate.Execute error
-func CreateGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, l services.Logger, webui services.WebUIClient) {
+func CreateGET(ctx context.Context, w http.ResponseWriter, r *http.Request, webui services.WebUIClient) {
 	pu, pr := auth.CredentialsFromRequest(r)
 
 	resp, err := webui.CreateGET(ctx, &records.CreateGETRequest{
@@ -45,6 +45,7 @@ func CreateGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db d
 	})
 
 	if err != nil {
+		log.Printf("webui.CreateGET error: %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
@@ -80,7 +81,7 @@ func CreateGET(ctx context.Context, w http.ResponseWriter, r *http.Request, db d
 //			- ctx missing user
 //			- access.CanCreate error
 //			- db.Save error
-func CreatePOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db data.DB, l services.Logger, webui services.WebUIClient) {
+func CreatePOST(ctx context.Context, w http.ResponseWriter, r *http.Request, webui services.WebUIClient) {
 	pu, pr := auth.CredentialsFromRequest(r)
 
 	defer r.Body.Close()
@@ -98,6 +99,7 @@ func CreatePOST(ctx context.Context, w http.ResponseWriter, r *http.Request, db 
 	})
 
 	if err != nil {
+		log.Printf("webui.CreatePOST error: %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}

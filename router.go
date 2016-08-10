@@ -47,7 +47,7 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 	mux.HandleFunc(routes.Index, logRequest(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
-			routes.RegisterGET(ctx, w, r, s.WebUIClient)
+			w.Write([]byte("Who is John Galt?"))
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
@@ -58,11 +58,7 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 	mux.HandleFunc(routes.RecordsQuery, logRequest(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
-			ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
-			if !ok {
-				return
-			}
-			routes.Records.QueryGET(ctx, w, r, s.DB, s.Logger)
+			routes.Records.QueryGET(ctx, w, r, s.WebUIClient)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
@@ -71,14 +67,9 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 
 	// /records/new/
 	mux.HandleFunc(routes.RecordsNew, logRequest(func(w http.ResponseWriter, r *http.Request) {
-		ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
-		if !ok {
-			return
-		}
-
 		switch r.Method {
 		case "GET":
-			routes.Records.NewGET(ctx, w, r, s.DB, s.Logger)
+			routes.Records.NewGET(ctx, w, r, s.WebUIClient)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
@@ -89,9 +80,9 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 	mux.HandleFunc(routes.RecordsCreate, logRequest(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
-			routes.Records.CreateGET(ctx, w, r, s.DB, s.Logger, s.WebUIClient)
+			routes.Records.CreateGET(ctx, w, r, s.WebUIClient)
 		case "POST":
-			routes.Records.CreatePOST(ctx, w, r, s.DB, s.Logger, s.WebUIClient)
+			routes.Records.CreatePOST(ctx, w, r, s.WebUIClient)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
@@ -100,15 +91,11 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 
 	// /records/edit/
 	mux.HandleFunc(routes.RecordsEdit, logRequest(func(w http.ResponseWriter, r *http.Request) {
-		ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
-		if !ok {
-			return
-		}
 		switch r.Method {
 		case "GET":
-			routes.Records.EditGET(ctx, w, r, s.DB, s.Logger)
+			routes.Records.EditGET(ctx, w, r, s.WebUIClient)
 		case "POST":
-			routes.Records.EditPOST(ctx, w, r, s.DB, s.Logger)
+			routes.Records.EditPOST(ctx, w, r, s.WebUIClient)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
@@ -117,13 +104,9 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 
 	// /records/view/
 	mux.HandleFunc(routes.RecordsView, logRequest(func(w http.ResponseWriter, r *http.Request) {
-		ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
-		if !ok {
-			return
-		}
 		switch r.Method {
 		case "GET":
-			routes.Records.ViewGET(ctx, w, r, s.DB, s.Logger)
+			routes.Records.ViewGET(ctx, w, r, s.WebUIClient)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
