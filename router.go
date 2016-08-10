@@ -1,7 +1,6 @@
 package gaia
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/elos/gaia/routes"
@@ -48,12 +47,7 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 	mux.HandleFunc(routes.Index, logRequest(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
-			log.Print("index")
-			ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
-			if !ok {
-				return
-			}
-			routes.RegisterGET(ctx, w, r, s.DB, s.Logger, s.WebUIClient)
+			routes.RegisterGET(ctx, w, r, s.WebUIClient)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
@@ -140,9 +134,9 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 	mux.HandleFunc(routes.Register, logRequest(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
-			routes.RegisterPOST(requestBackground, w, r, s.DB, s.Logger, s.WebUIClient)
+			routes.RegisterPOST(requestBackground, w, r, s.WebUIClient)
 		case "GET":
-			routes.RegisterGET(requestBackground, w, r, s.DB, s.Logger, s.WebUIClient)
+			routes.RegisterGET(requestBackground, w, r, s.WebUIClient)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
@@ -151,17 +145,11 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 
 	// /login/
 	mux.HandleFunc(routes.Login, logRequest(func(w http.ResponseWriter, r *http.Request) {
-
 		switch r.Method {
 		case "POST":
-			ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
-			if !ok {
-				return
-			}
-
-			routes.LoginPOST(ctx, w, r, s.DB, s.Logger)
+			routes.LoginPOST(ctx, w, r, s.WebUIClient)
 		case "GET":
-			routes.LoginGET(requestBackground, w, r, s.DB, s.Logger, s.WebUIClient)
+			routes.LoginGET(requestBackground, w, r, s.WebUIClient)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
