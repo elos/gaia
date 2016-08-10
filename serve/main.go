@@ -18,7 +18,7 @@ import (
 	"github.com/elos/models"
 	"github.com/elos/models/user"
 	"github.com/elos/x/auth"
-	xdata "github.com/elos/x/data"
+	"github.com/elos/x/data/access"
 	"github.com/elos/x/records"
 	"github.com/subosito/twilio"
 	"golang.org/x/net/context"
@@ -30,22 +30,21 @@ const (
 	TwilioFromNumber = "+16503810349"
 )
 
+var (
+	addr     = flag.String("addr", "0.0.0.0", "address to listen on")
+	port     = flag.Int("port", 80, "port to listen on")
+	dbtype   = flag.String("dbtype", "mongo", "type of database to use: (mem or mongo)")
+	dbaddr   = flag.String("dbaddr", "0.0.0.0", "address of database")
+	appdir   = flag.String("appdir", "app", "directory of maia build")
+	certFile = flag.String("certfile", "", "cert file")
+	keyFile  = flag.String("keyfile", "", "private keY")
+)
+
 func main() {
-	var (
-		addr     = flag.String("addr", "0.0.0.0", "address to listen on")
-		port     = flag.Int("port", 80, "port to listen on")
-		dbtype   = flag.String("dbtype", "mongo", "type of database to use: (mem or mongo)")
-		dbaddr   = flag.String("dbaddr", "0.0.0.0", "address of database")
-		appdir   = flag.String("appdir", "app", "directory of maia build")
-		seed     = flag.String("seed", "", "directory containing seed data")
-		certFile = flag.String("certfile", "", "cert file")
-		keyFile  = flag.String("keyfile", "", "private keY")
-
-		db  data.DB
-		err error
-	)
-
 	flag.Parse()
+
+	var db data.DB
+	var err error
 
 	log.Printf("== Setting Up Database ==")
 	log.Printf("\tDatabase Type: %s", *dbtype)
@@ -62,104 +61,30 @@ func main() {
 		log.Fatal("Unrecognized database type: '%s'", *dbtype)
 	}
 	log.Printf("== Set up Database ==")
-	if *seed != "" {
-		/*
-			log.Printf("== Seeding Database ==")
-			bytes, err := ioutil.ReadFile(*seed)
-			if err != nil {
-				log.Fatalf("ioutil.ReadFile(%q) error: %s", *seed, err)
-			}
-
-			seeds := make(map[data.Kind][]interface{})
-			if err := json.Unmarshal(bytes, &seeds); err != nil {
-				log.Fatalf("json.Unmarshal(bytes, seeds) error: %s", err)
-			}
-
-			for k, ss := range seeds {
-				_, ok := models.Kinds[k]
-				if !ok {
-					log.Fatal("unrecognized kind: %q", k)
-				}
-
-				m := models.ModelFor(k)
-				for i := range ss {
-					transfer.TransferAttrs(i, m)
-					log.Print(m)
-					if err := db.Save(m); err != nil {
-						log.Fatalf("db.Save(m) error: %s", err)
-					}
-					m = models.ModelFor(k)
-				}
-			}
-			log.Printf("== Seeded Database ==")
-		*/
-	} else {
-		log.Printf("\tno seed")
-	}
-
-	// DB SERVER
-	lis, err := net.Listen("tcp", ":1111")
-	if err != nil {
-		log.Fatalf("failed to listen on :1111: %v", err)
-	}
-	g := grpc.NewServer()
-	xdata.RegisterDBServer(g, xdata.NewDBServer(db))
-	go g.Serve(lis)
 
 	// DB CLIENT
-	conn, err := grpc.Dial(":1111", grpc.WithInsecure())
+	conn, err := grpc.Dial(":3334", grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("failed to dial: %v", err)
 	}
 	defer conn.Close()
-	dbclient := xdata.NewDBClient(conn)
-
-	// AUTH SERVER
-	lis, err = net.Listen("tcp", ":1112")
-	if err != nil {
-		log.Fatalf("failed to listen on :1112: %v", err)
-	}
-	g = grpc.NewServer()
-	auth.RegisterAuthServer(g, auth.NewServer(dbclient))
-	go g.Serve(lis)
+	adbc := access.NewDBClient(conn)
 
 	// AUTH CLIENT
-	conn, err = grpc.Dial(":1112", grpc.WithInsecure())
+	conn, err = grpc.Dial(":3333", grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("failed to dial: %v", err)
 	}
 	defer conn.Close()
-	authclient := auth.NewAuthClient(conn)
-
-	/*
-		// external db!!
-		lis, err = net.Listen("tcp", ":10000")
-		if err != nil {
-			log.Fatalf("failed to listen on :10000")
-		}
-		tc, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
-		if err != nil {
-			log.Fatal("crednetials.NewServerTLSFromFile error: %v", err)
-		}
-
-		g = grpc.NewServer( grpc.Creds(tc) )
-		xdata.RegisterDBServer(
-			g,
-			external.NewDB(db, access.NewLocalClient(), authclient),
-		)
-		go g.Serve(lis)
-	*/
+	ac := auth.NewAuthClient(conn)
 
 	// WEBUI SERVER
-	lis, err = net.Listen("tcp", ":1113")
+	lis, err := net.Listen("tcp", ":1113")
 	if err != nil {
 		log.Fatalf("failed to listen on :1113: %v", err)
 	}
-	g = grpc.NewServer()
-	records.RegisterWebUIServer(
-		g,
-		records.NewWebUI(dbclient, authclient),
-	)
+	g := grpc.NewServer()
+	records.RegisterWebUIServer(g, records.NewWebUI(adbc, ac))
 	go g.Serve(lis)
 
 	// WEB UI CLIENT
