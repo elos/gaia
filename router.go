@@ -93,11 +93,6 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 
 	// /records/create/
 	mux.HandleFunc(routes.RecordsCreate, logRequest(func(w http.ResponseWriter, r *http.Request) {
-		ctx, ok := routes.Authenticate(requestBackground, w, r, s.Logger, s.DB)
-		if !ok {
-			return
-		}
-
 		switch r.Method {
 		case "GET":
 			routes.Records.CreateGET(ctx, w, r, s.DB, s.Logger, s.WebUIClient)
