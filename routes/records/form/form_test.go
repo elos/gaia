@@ -12,6 +12,16 @@ import (
 	"github.com/elos/models/user"
 )
 
+type NamedPrimitive int
+
+func (n NamedPrimitive) MarshalForm(ns string) ([]byte, error) {
+	return []byte("barfoobar"), nil
+}
+
+type Composite struct {
+	N NamedPrimitive
+}
+
 // --- TestMarshal {{{
 func TestMarshal(t *testing.T) {
 	cases := []struct {
@@ -239,6 +249,13 @@ func TestMarshal(t *testing.T) {
 				unexp: 5,
 			},
 			output: `<fieldset><legend>ignore_unexported</legend></fieldset>`,
+		},
+		{
+			name: "field override",
+			structure: &Composite{
+				N: NamedPrimitive(1),
+			},
+			output: `<fieldset><legend>field override</legend>barfoobar<br></fieldset>`,
 		},
 
 		// Form struct

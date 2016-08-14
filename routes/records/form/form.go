@@ -27,6 +27,13 @@ type (
 	}
 )
 
+func Must(bs []byte, err error) []byte {
+	if err != nil {
+		panic(fmt.Sprintf("err != nil: %v", err))
+	}
+	return bs
+}
+
 // --- Marshal {{{
 
 // Marshal marshals a Go type into an HTML5 form.
@@ -47,6 +54,10 @@ func Marshal(i interface{}, namespace string) ([]byte, error) {
 // marshalValue is the internal implementation, you will see the
 // named implementations, then the various reflection matches.
 func marshalValue(namespace string, v reflect.Value) ([]byte, error) {
+	if m, ok := v.Interface().(Marshaler); ok {
+		return m.MarshalForm(namespace)
+	}
+
 	if v.Type().Name() == "Time" {
 		return encodeTime(namespace, v.Interface().(time.Time)), nil
 	}
