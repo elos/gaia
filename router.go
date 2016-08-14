@@ -113,6 +113,17 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 		}
 	}, s.Logger))
 
+	// /records/delete/
+	mux.HandleFunc(routes.RecordsDelete, logRequest(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			routes.Records.DeletePOST(ctx, w, r, s.WebUIClient)
+		default:
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+	}, s.Logger))
+
 	// /register/
 	mux.HandleFunc(routes.Register, logRequest(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
