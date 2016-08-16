@@ -84,7 +84,7 @@ func main() {
 		log.Fatalf("failed to listen on :1113: %v", err)
 	}
 	g := grpc.NewServer()
-	records.RegisterWebUIServer(g, records.NewWebUI(adbc, ac))
+	records.RegisterWebUIServer(g, records.Logged(records.NewWebUI(adbc, ac)))
 	go g.Serve(lis)
 
 	// WEB UI CLIENT
