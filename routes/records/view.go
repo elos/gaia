@@ -1,17 +1,6 @@
 package records
 
-import (
-	"log"
-	"net/http"
-	"strings"
-	"text/template"
-
-	"github.com/elos/gaia/services"
-	"github.com/elos/x/auth"
-	"github.com/elos/x/models"
-	"github.com/elos/x/records"
-	"golang.org/x/net/context"
-)
+import "text/template"
 
 const viewTemplateRaw = `
 <html>
@@ -43,53 +32,4 @@ var ViewTemplate = template.Must(template.New("records/view").Parse(viewTemplate
 type ViewData struct {
 	Flash, Kind, ID string
 	Record          map[string]interface{}
-}
-
-// ViewGET handles a `GET` request to the `/records/view/` route of the records web UI.
-//
-// Parameters:
-//		{
-//			kind string
-//			id string
-//		}
-//
-// ViewGET matches against the `kind` and `id` parameters and marshals the record to a table of attributes.
-//
-// Success:
-//		* StatusFound
-//			- html page with the record's info
-//
-// Errors:
-//		* StatusBadRequest
-//			- missing kind
-//			- unrecognized kind
-//			- missing id
-//			- invalid id
-//		* StatusNotFound
-//			- db.PopulateByID data.ErrNotFound (still html, with a flash message)
-//			- access.CanRead false (still html, with a flash message)
-//		* StatusInternalServerError
-//			- r.ParseForm error
-//			- db.PopulateByID error
-//			- ctx missing user
-//			- access.CanRead error
-//			- transfer.TransferAttrs error
-//			- ViewTemplate.Execute error (by 3 paths)
-func ViewGET(ctx context.Context, w http.ResponseWriter, r *http.Request, webui services.WebUIClient) {
-	pu, pr := auth.CredentialsFromRequest(r)
-
-	resp, err := webui.ViewGET(ctx, &records.ViewGETRequest{
-		Public:  pu,
-		Private: pr,
-		Kind:    models.Kind(models.Kind_value[strings.ToUpper(r.FormValue("kind"))]),
-		Id:      r.FormValue("id"),
-	})
-
-	if err != nil {
-		log.Printf("webui.ViewGET error: %v", err)
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
-	}
-
-	resp.ServeHTTP(w, r)
 }

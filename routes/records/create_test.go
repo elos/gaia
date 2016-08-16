@@ -2,7 +2,6 @@ package records_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -10,40 +9,23 @@ import (
 	"testing"
 
 	"github.com/elos/data"
-	"github.com/elos/data/builtin/mem"
 	"github.com/elos/gaia/routes/records"
 	"github.com/elos/gaia/services"
 	"github.com/elos/models/user"
-	"github.com/elos/x/auth"
-	xdata "github.com/elos/x/data"
-	xmodels "github.com/elos/x/models"
-	xrecords "github.com/elos/x/records"
+	"github.com/elos/x/models"
+	records_test "github.com/elos/x/records_test"
 	"golang.org/x/net/context"
 )
 
 func TestCreateGET(t *testing.T) {
-	db := mem.NewDB()
-
-	dbclient, conn, err := xdata.DBBothLocal(db)
-	if err != nil {
-		t.Fatalf("xdata.DBBothLocal error: %v", err)
-	}
-	defer conn.Close()
-
-	authclient, conn, err := auth.AuthBothLocal(dbclient)
-	if err != nil {
-		t.Fatalf("auth.AuthBothLocal error: %v", err)
-	}
-	defer conn.Close()
-
-	webuiclient, conn, err := xrecords.WebUIBothLocal(dbclient, authclient)
-	if err != nil {
-		t.Fatalf("records.WebUIBothLocal error: %v", err)
-	}
-	defer conn.Close()
+	adb, dbc, ac, closers, err := records_test.ClientsFromState(data.State{})
+	defer func() {
+		records_test.CloseAll(closers)
+	}()
+	wui := records.NewWebUI(adb, ac)
 
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		records.CreateGET(context.Background(), w, r, db, services.NewTestLogger(t), webuiclient)
+		records.CreateGET(context.Background(), w, r, db, services.NewTestLogger(t), wui)
 	}))
 
 	p := s.URL + "?" + url.Values{"kind": []string{"event"}}.Encode()
@@ -66,39 +48,42 @@ func TestCreateGET(t *testing.T) {
 }
 
 func TestCreatePOST(t *testing.T) {
-	db := mem.NewDB()
-	dbclient, conn, err := xdata.DBBothLocal(db)
-	if err != nil {
-		t.Fatalf("xdata.DBBothLocal error: %v", err)
-	}
-	defer conn.Close()
-
-	authclient, conn, err := auth.AuthBothLocal(dbclient)
-	if err != nil {
-		t.Fatalf("auth.AuthBothLocal error: %v", err)
-	}
-	defer conn.Close()
-
-	webuiclient, conn, err := xrecords.WebUIBothLocal(dbclient, authclient)
-	if err != nil {
-		t.Fatalf("records.WebUIBothLocal error: %v", err)
-	}
-	defer conn.Close()
-
-	u, _, err := user.Create(db, "username", "password")
-	if err != nil {
-		t.Fatalf("user.Create error: %v", err)
-	}
+	adb, dbc, ac, closers, err := records_test.ClientsFromState(data.State{
+		models.Kind_USER: []*data.Record{
+			*data.Record{
+				Kind: models.Kind_USER,
+				User: &models.User{
+					Id: "1",
+				},
+			},
+		},
+		models.Kind_CREDENTIAL: []*data.Record{
+			&data.Record{
+				Kind: models.Kind_CREDENTIAL,
+				Credential: &models.Credential{
+					Id:      "2",
+					OwnerId: "1",
+					Type:    models.Credential_PASSWORD,
+					Public:  "username",
+					Private: "password",
+				},
+			},
+		},
+	})
+	defer func() {
+		records_test.CloseAll(closers)
+	}()
+	wui := records.NewWebUI(adb, ac)
 
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		records.CreatePOST(user.NewContext(context.Background(), u), w, r, db, services.NewTestLogger(t), webuiclient)
 	}))
 
 	p := s.URL + "?" + url.Values{
-		"kind":          []string{"event"},
-		"EVENT/OwnerId": []string{u.ID().String()},
-		"EVENT/Name":    []string{"event name"},
-		"EVENT/Data":    []string{`{"sensor": 45}`},
+		"kind":             []string{"EVENT"},
+		"EVENT/OwnerId":    []string{"1"},
+		"EVENT/Name":       []string{"event name"},
+		"EVENT/Quantities": []string{`[{"name": "sensor", "value": 45}]`},
 	}.Encode()
 
 	resp, err := http.Post(p, "", new(bytes.Buffer))
@@ -113,33 +98,42 @@ func TestCreatePOST(t *testing.T) {
 	}
 	t.Logf("resp.Body:\n%s", body)
 
-	iter, err := db.Query(data.Kind(xmodels.Kind_EVENT.String())).Execute()
-	if err != nil {
-		t.Fatalf("db.Query error: %v", err)
-	}
-
-	e := new(xmodels.Event)
-	iter.Next(e)
-	if err := iter.Close(); err != nil {
-		t.Fatalf("iter.Close error: %v", err)
-	}
-
-	if got, want := e.Name, "event name"; got != want {
-		t.Errorf("e.Name: got %q, want %q", got, want)
-	}
-
-	if got, want := e.OwnerId, u.ID().String(); got != want {
-		t.Errorf("e.OwnerId: got %q, want %q", got, want)
-	}
-
-	data := make(map[string]interface{})
-	if err := json.Unmarshal(e.Data, &data); err != nil {
-		t.Fatalf("json.Unarshal error: %v", err)
-	}
-
-	if sensor := data["sensor"]; sensor == nil {
-		t.Fatal("e.Data[\"sensor\"]: nil")
-	} else if got, want := sensor.(float64), 45.0; got != want {
-		t.Errorf("e.Data[\"sensor\"]: got %f, want %f", got, want)
+	if err := data.CompareState(dbc, data.State{
+		models.Kind_USER: []*data.Record{
+			*data.Record{
+				Kind: models.Kind_USER,
+				User: &models.User{
+					Id: "1",
+				},
+			},
+		},
+		models.Kind_CREDENTIAL: []*data.Record{
+			&data.Record{
+				Kind: models.Kind_CREDENTIAL,
+				Credential: &models.Credential{
+					Id:      "2",
+					OwnerId: "1",
+					Type:    models.Credential_PASSWORD,
+					Public:  "username",
+					Private: "password",
+				},
+			},
+		},
+		models.Kind_EVENT: []*data.Record{
+			&data.Record{
+				Kind: models.Kind_EVENT,
+				Event: &models.Event{
+					Id:      "3",
+					OwnerId: "1",
+					Name:    "event name",
+					Quantities: []*Quantity{
+						Name:  "sensor",
+						Value: 45,
+					},
+				},
+			},
+		},
+	}); err != nil {
+		t.Errorf("data.CompareState error: %v", err)
 	}
 }
