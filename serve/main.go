@@ -19,6 +19,7 @@ import (
 	"github.com/elos/models/user"
 	"github.com/elos/x/auth"
 	"github.com/elos/x/data/access"
+	"github.com/elos/x/models/cal"
 	"github.com/elos/x/records"
 	"github.com/subosito/twilio"
 	"golang.org/x/net/context"
@@ -95,6 +96,23 @@ func main() {
 	defer conn.Close()
 	webuiclient := records.NewWebUIClient(conn)
 
+	// calendar WEBUI SERVER
+	lis, err = net.Listen("tcp", ":1114")
+	if err != nil {
+		log.Fatalf("failed to listen on :1114: %v", err)
+	}
+	g = grpc.NewServer()
+	cal.RegisterWebUIServer(g, cal.NewWebUI(adbc, ac))
+	go g.Serve(lis)
+
+	// cal WEB UI CLIENT
+	conn, err = grpc.Dial(":1114", grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("failed to dial: %v", err)
+	}
+	defer conn.Close()
+	calwebui := cal.NewWebUIClient(conn)
+
 	if _, _, err := user.Create(db, "u", "p"); err != nil {
 		log.Fatal("user.Create error: %s", err)
 	}
@@ -124,6 +142,7 @@ func main() {
 			DB:                 db,
 			Logger:             services.NewLogger(os.Stderr),
 			WebUIClient:        webuiclient,
+			CalWebUIClient:     calwebui,
 		},
 	)
 	log.Printf("== Initiliazed Gaia Core ==")
