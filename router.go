@@ -5,6 +5,7 @@ import (
 
 	"github.com/elos/gaia/routes"
 	"github.com/elos/gaia/services"
+	"github.com/elos/x/models/cal"
 	"golang.org/x/net/context"
 	"golang.org/x/net/websocket"
 )
@@ -247,6 +248,17 @@ func router(ctx context.Context, m *Middleware, s *Services) (http.Handler, cont
 		switch r.Method {
 		case "POST":
 			routes.MobileLocationPOST(ctx, w, r, s.Logger, s.DB)
+		default:
+			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+			return
+		}
+	}, s.Logger))
+
+	// /cal/week/
+	mux.HandleFunc(routes.CalWeek, logRequest(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET":
+			cal.WeekGET(ctx, w, r, s.CalWebUIClient)
 		default:
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return

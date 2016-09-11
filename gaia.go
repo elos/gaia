@@ -18,6 +18,7 @@ type Services struct {
 	services.WebCommandSessions
 	services.AppFileSystem
 	services.WebUIClient
+	services.CalWebUIClient
 }
 
 type Gaia struct {
