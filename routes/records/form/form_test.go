@@ -136,28 +136,22 @@ func TestMarshal(t *testing.T) {
 			name:      "[]int",
 			structure: []int{1, 2, 3},
 			output: strings.TrimSpace(`
-<label for="[]int">[]int</label><textarea name="[]int">[
-	1,
-	2,
-	3
-]</textarea>
+<fieldset><legend>[]int</legend><label for="[]int/0">0</label><input name="[]int/0" type="number" value="1" /><br><label for="[]int/1">1</label><input name="[]int/1" type="number" value="2" /><br><label for="[]int/2">2</label><input name="[]int/2" type="number" value="3" /><br></fieldset>
 			`),
 		},
 		{
 			name:      "[]string",
 			structure: []string{"foo", "bar", "tod"},
 			output: strings.TrimSpace(`
-<label for="[]string">[]string</label><textarea name="[]string">[
-	"foo",
-	"bar",
-	"tod"
-]</textarea>
+<fieldset><legend>[]string</legend><label for="[]string/0">0</label><input name="[]string/0" type="text" value="foo" /><br><label for="[]string/1">1</label><input name="[]string/1" type="text" value="bar" /><br><label for="[]string/2">2</label><input name="[]string/2" type="text" value="tod" /><br></fieldset>
 			`),
 		},
 		{
 			name:      "[]byte",
 			structure: []byte{1, 2, 3, 4, 5},
-			output:    `<label for="[]byte">[]byte</label><textarea name="[]byte">"AQIDBAU="</textarea>`,
+			output: strings.TrimSpace(`
+<fieldset><legend>[]byte</legend><label for="[]byte/0">0</label><input name="[]byte/0" type="number" value="1" /><br><label for="[]byte/1">1</label><input name="[]byte/1" type="number" value="2" /><br><label for="[]byte/2">2</label><input name="[]byte/2" type="number" value="3" /><br><label for="[]byte/3">3</label><input name="[]byte/3" type="number" value="4" /><br><label for="[]byte/4">4</label><input name="[]byte/4" type="number" value="5" /><br></fieldset>
+            `),
 		},
 		// Maps
 		{

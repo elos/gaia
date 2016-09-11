@@ -98,7 +98,7 @@ func marshalValue(namespace string, v reflect.Value) ([]byte, error) {
 
 	// Composites
 	case reflect.Slice:
-		fallthrough
+		return marshalSlice(namespace, v)
 	case reflect.Map:
 		return marshalComposite(namespace, v)
 	case reflect.Struct:
@@ -194,6 +194,37 @@ func encodeString(name, quote string) []byte {
 		Name:  name,
 		Value: quote,
 	}).MarshalText())...)
+}
+
+func marshalSlice(namespace string, s reflect.Value) ([]byte, error) {
+    b := new(bytes.Buffer)
+    _, err := b.WriteString(fmt.Sprintf("<fieldset><legend>%s</legend>", path.Base(namespace)))
+    if err != nil {
+        return nil, err
+    }
+    for i := 0; i < s.Len(); i++ {
+        bytes, err := marshalElem(namespace, s.Index(i), i)
+        if err != nil {
+            return nil, err
+        }
+        if _, err := b.Write(bytes); err != nil {
+            return nil, err
+        }
+        if len(bytes) != 0 {
+            if _, err := b.WriteString("<br>"); err != nil {
+                return nil, err
+            }
+        }
+    }
+    _, err = b.WriteString("</fieldset>")
+    if err != nil {
+        return nil, err
+    }
+    return b.Bytes(), nil
+}
+
+func marshalElem(namespace string, s reflect.Value, i int) ([]byte, error) {
+    return marshalValue(path.Join(namespace, strconv.Itoa(i)), s)
 }
 
 func marshalComposite(name string, v reflect.Value) ([]byte, error) {
