@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"strconv"
 	"time"
+
+	"github.com/elos/x/html"
 )
 
 type (
@@ -129,31 +131,69 @@ func marshalValue(namespace string, v reflect.Value) ([]byte, error) {
 }
 
 func encodeTime(name string, quote time.Time) []byte {
-	return []byte(fmt.Sprintf(`<label for="%s">%s</label><input name="%s" type="datetime-local" value="%s" />`, name, path.Base(name), name, quote.Format(time.RFC3339)))
+	return append(html.Must((&html.Label{
+		For:   name,
+		Label: path.Base(name),
+	}).MarshalText()), html.Must((&html.Input{
+		Name:  name,
+		Type:  html.Input_DATETIME_LOCAL,
+		Value: quote.Format(time.RFC3339),
+	}).MarshalText())...)
 }
 
 func encodeBool(name string, quote bool) []byte {
-	checked := "checked"
-	if !quote {
-		checked = ""
-	}
-	return []byte(fmt.Sprintf(`<label for="%s">%s</label><input name="%s" type="checkbox" %s/>`, name, path.Base(name), name, checked))
+	return append(html.Must((&html.Label{
+		For:   name,
+		Label: path.Base(name),
+	}).MarshalText()), html.Must((&html.Input{
+		Name:    name,
+		Type:    html.Input_CHECKBOX,
+		Checked: quote,
+	}).MarshalText())...)
 }
 
 func encodeInt(name string, quote int64) []byte {
-	return []byte(fmt.Sprintf(`<label for="%s">%s</label><input name="%s" type="number" value="%d" />`, name, path.Base(name), name, quote))
+	return append(html.Must((&html.Label{
+		For:   name,
+		Label: path.Base(name),
+	}).MarshalText()), html.Must((&html.Input{
+		Type:  html.Input_NUMBER,
+		Name:  name,
+		Value: fmt.Sprintf("%d", quote),
+	}).MarshalText())...)
 }
 
 func encodeUint(name string, quote uint64) []byte {
-	return []byte(fmt.Sprintf(`<label for="%s">%s</label><input name="%s" type="number" value="%d" />`, name, path.Base(name), name, quote))
+	return append(html.Must((&html.Label{
+		For:   name,
+		Label: path.Base(name),
+	}).MarshalText()), html.Must((&html.Input{
+		Type:  html.Input_NUMBER,
+		Name:  name,
+		Value: fmt.Sprintf("%d", quote),
+	}).MarshalText())...)
 }
 
 func encodeFloat(name string, quote float64) []byte {
-	return []byte(fmt.Sprintf(`<label for="%s">%s</label><input name="%s" type="number" value="%f" />`, name, path.Base(name), name, quote))
+	return append(html.Must((&html.Label{
+		For:   name,
+		Label: path.Base(name),
+	}).MarshalText()), html.Must((&html.Input{
+		Type:  html.Input_NUMBER,
+		Name:  name,
+		Value: fmt.Sprintf("%f", quote),
+	}).MarshalText())...)
 }
 
 func encodeString(name, quote string) []byte {
-	return []byte(fmt.Sprintf(`<label for="%s">%s</label><input name="%s" type="text" value="%s" />`, name, path.Base(name), name, quote))
+	return append(html.Must((&html.Label{
+		For:   name,
+		Label: path.Base(name),
+	}).MarshalText()), html.Must((&html.Input{
+		Type:  html.Input_TEXT,
+		Name:  name,
+		Value: quote,
+	}).MarshalText())...)
 }
 
 func marshalComposite(name string, v reflect.Value) ([]byte, error) {
@@ -162,7 +202,13 @@ func marshalComposite(name string, v reflect.Value) ([]byte, error) {
 		return nil, err
 	}
 
-	return []byte(fmt.Sprintf(`<label for="%s">%s</label><textarea name="%s">%s</textarea>`, name, path.Base(name), name, string(bytes))), nil
+	return append(html.Must((&html.Label{
+		For:   name,
+		Label: path.Base(name),
+	}).MarshalText()), html.Must((&html.TextArea{
+		Name:    name,
+		Content: string(bytes),
+	}).MarshalText())...), nil
 }
 
 func marshalStruct(namespace string, s reflect.Value) ([]byte, error) {
@@ -246,6 +292,11 @@ func unmarshalValue(form url.Values, v reflect.Value, namespace string) error {
 				return decodeTime(param, v)
 			}
 		}
+	}
+
+	i := v.Interface()
+	if fe, ok := i.(Unmarshaler); ok {
+		return fe.UnmarshalForm(form, namespace)
 	}
 
 	switch v.Kind() {
@@ -441,12 +492,7 @@ func unmarshalValue(form url.Values, v reflect.Value, namespace string) error {
 			return nil
 		}
 
-		i := v.Interface()
-		if fe, ok := i.(Unmarshaler); ok {
-			return fe.UnmarshalForm(form, namespace)
-		}
-
-		return unmarshalValue(form, reflect.ValueOf(i), namespace)
+		return unmarshalValue(form, v, namespace)
 
 	// The default case is an error, a failure to evaluate the
 	// type of the value and select an adequate marshalling.

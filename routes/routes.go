@@ -23,4 +23,7 @@ const (
 	RecordsEdit   = "/records/edit/"
 	RecordsView   = "/records/view/"
 	RecordsDelete = "/records/delete/"
+
+	// Calendar web ui
+	CalWeek = "/cal/week/"
 )

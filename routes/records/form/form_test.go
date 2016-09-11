@@ -47,7 +47,7 @@ func TestMarshal(t *testing.T) {
 		{
 			name:      "bool_true",
 			structure: true,
-			output:    `<label for="bool_true">bool_true</label><input name="bool_true" type="checkbox" checked/>`,
+			output:    `<label for="bool_true">bool_true</label><input name="bool_true" type="checkbox" checked />`,
 		},
 		{
 			name:      "bool_false",
@@ -157,7 +157,7 @@ func TestMarshal(t *testing.T) {
 		{
 			name:      "[]byte",
 			structure: []byte{1, 2, 3, 4, 5},
-			output:    "",
+			output:    `<label for="[]byte">[]byte</label><textarea name="[]byte">"AQIDBAU="</textarea>`,
 		},
 		// Maps
 		{
@@ -190,7 +190,7 @@ func TestMarshal(t *testing.T) {
 			}{
 				B: true,
 			},
-			output: `<fieldset><legend>bool_field_true</legend><label for="bool_field_true/B">B</label><input name="bool_field_true/B" type="checkbox" checked/><br></fieldset>`,
+			output: `<fieldset><legend>bool_field_true</legend><label for="bool_field_true/B">B</label><input name="bool_field_true/B" type="checkbox" checked /><br></fieldset>`,
 		},
 		{
 			name: "bool_field_false",
@@ -308,16 +308,17 @@ func TestMarshal(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		t.Logf("Running: %s", c.name)
-		bytes, err := form.Marshal(c.structure, c.name)
-		if err != nil {
-			t.Fatalf("form.Marshal error: %v", err)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			bytes, err := form.Marshal(c.structure, c.name)
+			if err != nil {
+				t.Fatalf("form.Marshal error: %v", err)
+			}
 
-		out := string(bytes)
-		if got, want := out, c.output; got != want {
-			t.Errorf("output: got,\n%s\nwant,\n%s", got, want)
-		}
+			out := string(bytes)
+			if got, want := out, c.output; got != want {
+				t.Errorf("output: got,\n%s\nwant,\n%s", got, want)
+			}
+		})
 	}
 }
 
