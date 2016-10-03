@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -32,13 +33,15 @@ const (
 )
 
 var (
-	addr     = flag.String("addr", "0.0.0.0", "address to listen on")
-	port     = flag.Int("port", 80, "port to listen on")
-	dbtype   = flag.String("dbtype", "mongo", "type of database to use: (mem or mongo)")
-	dbaddr   = flag.String("dbaddr", "0.0.0.0", "address of database")
-	appdir   = flag.String("appdir", "app", "directory of maia build")
-	certFile = flag.String("certfile", "", "cert file")
-	keyFile  = flag.String("keyfile", "", "private keY")
+	addr         = flag.String("addr", "0.0.0.0", "address to listen on")
+	port         = flag.Int("port", 80, "port to listen on")
+	dbtype       = flag.String("dbtype", "mongo", "type of database to use: (mem or mongo)")
+	dbaddr       = flag.String("dbaddr", "0.0.0.0", "address of database")
+	appdir       = flag.String("appdir", "app", "directory of maia build")
+	certFile     = flag.String("certfile", "", "cert file")
+	keyFile      = flag.String("keyfile", "", "private keY")
+	cerberusaddr = flag.String("cerberusaddr", "", "address of cerberus auth server")
+	metisaddr    = flag.String("metisaddr", "", "address of metis")
 )
 
 func main() {
@@ -63,21 +66,52 @@ func main() {
 	}
 	log.Printf("== Set up Database ==")
 
-	// DB CLIENT
-	conn, err := grpc.Dial(":3334", grpc.WithInsecure())
-	if err != nil {
-		log.Fatalf("failed to dial: %v", err)
-	}
-	defer conn.Close()
-	adbc := access.NewDBClient(conn)
+	var adbc access.DBClient
 
-	// AUTH CLIENT
-	conn, err = grpc.Dial(":3333", grpc.WithInsecure())
-	if err != nil {
-		log.Fatalf("failed to dial: %v", err)
+	if *metisaddr != "" {
+		// DB CLIENT
+		conn, err := grpc.Dial(":3334", grpc.WithInsecure())
+		if err != nil {
+			log.Fatalf("failed to dial: %v", err)
+		}
+		defer conn.Close()
+		adbc = access.NewDBClient(conn)
+	} else {
+		var closers []io.Closer
+		var err error
+		adbc, closers, err = access.NewTestDB(db)
+		if err != nil {
+			log.Fatal("access.NewTestDB error: %v", err)
+		}
+		defer func() {
+			for _, c := range closers {
+				c.Close()
+			}
+		}()
 	}
-	defer conn.Close()
-	ac := auth.NewAuthClient(conn)
+
+	var ac auth.AuthClient
+	// AUTH CLIENT
+	if *cerberusaddr != "" {
+		conn, err := grpc.Dial(":3333", grpc.WithInsecure())
+		if err != nil {
+			log.Fatalf("failed to dial: %v", err)
+		}
+		defer conn.Close()
+		ac = auth.NewAuthClient(conn)
+	} else {
+		var closers []io.Closer
+		var err error
+		ac, closers, err = auth.NewTestAuth(db)
+		if err != nil {
+			log.Fatalf("auth.NewTestAuth error: %v", err)
+		}
+		defer func() {
+			for _, c := range closers {
+				c.Close()
+			}
+		}()
+	}
 
 	// WEBUI SERVER
 	lis, err := net.Listen("tcp", ":1113")
@@ -89,7 +123,7 @@ func main() {
 	go g.Serve(lis)
 
 	// WEB UI CLIENT
-	conn, err = grpc.Dial(":1113", grpc.WithInsecure())
+	conn, err := grpc.Dial(":1113", grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("failed to dial: %v", err)
 	}
