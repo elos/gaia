@@ -55,6 +55,7 @@ func main() {
 	switch *dbtype {
 	case "mem":
 		db = mem.NewDB()
+
 	case "mongo":
 		db, err = models.MongoDB(*dbaddr)
 		if err != nil {
