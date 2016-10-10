@@ -198,10 +198,20 @@ func encodeString(name, quote string) []byte {
 
 func marshalSlice(namespace string, s reflect.Value) ([]byte, error) {
     b := new(bytes.Buffer)
-    _, err := b.WriteString(fmt.Sprintf("<fieldset><legend>%s</legend>", path.Base(namespace)))
+    _, err := b.WriteString(fmt.Sprintf("<fieldset class=\"slice-fieldset\"><legend>%s</legend>", path.Base(namespace)))
     if err != nil {
         return nil, err
     }
+
+    zero := reflect.Zero(s.Type().Elem())
+    bytes, err := marshalElem(namespace, zero, -1)
+    if err != nil {
+        return nil, err
+    }
+    if _, err := b.WriteString(fmt.Sprintf("<div class=\"zero-value\">%s</div>", bytes)); err != nil {
+        return nil, err
+    }
+
     for i := 0; i < s.Len(); i++ {
         bytes, err := marshalElem(namespace, s.Index(i), i)
         if err != nil {
@@ -224,7 +234,11 @@ func marshalSlice(namespace string, s reflect.Value) ([]byte, error) {
 }
 
 func marshalElem(namespace string, s reflect.Value, i int) ([]byte, error) {
-    return marshalValue(path.Join(namespace, strconv.Itoa(i)), s)
+    name := strconv.Itoa(i)
+    if i == -1  {
+        name = "%index%"
+    }
+    return marshalValue(path.Join(namespace, name), s)
 }
 
 func marshalComposite(name string, v reflect.Value) ([]byte, error) {
@@ -280,6 +294,8 @@ func marshalField(namespace string, s reflect.Value, f reflect.StructField) ([]b
 }
 
 // --- }}}
+
+// --- Unmarshal {{{
 
 func Unmarshal(form url.Values, i interface{}, namespace string) error {
 	// Protect against an immediate nil.
@@ -627,3 +643,5 @@ func unmarshalField(form url.Values, namespace string, s reflect.Value, f reflec
 		return unmarshalValue(form, field, path.Join(namespace, f.Name))
 	}
 }
+
+// --- }}}
