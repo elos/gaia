@@ -202,7 +202,7 @@ func main() {
 		if *port != 80 {
 			go func() {
 				fs := http.FileServer(http.Dir("/var/www/elos/"))
-				if err := http.ListenAndServe(fmt.Sprintf("host:%d", *port), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := http.ListenAndServe(fmt.Sprintf("%s:80", *addr), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					// Handle letsencrypt
 					log.Print("hit on .well-known")
 					fs.ServeHTTP(w, r)
