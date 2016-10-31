@@ -199,6 +199,19 @@ func main() {
 			log.Print("WARNING: serving HTTPS on a port that isn't 443")
 		}
 
+		if *port != 80 {
+			go func() {
+				fs := http.FileServer(http.Dir("/var/www/elos/"))
+				if err := http.ListenAndServe(fmt.Sprintf("host:%d", *port), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					// Handle letsencrypt
+					log.Print("hit on .well-known")
+					fs.ServeHTTP(w, r)
+				})); err != nil {
+					log.Fatal(err)
+				}
+			}()
+		}
+
 		if err = http.ListenAndServeTLS(host, *certFile, *keyFile, ga); err != nil {
 			log.Fatal(err)
 		}
